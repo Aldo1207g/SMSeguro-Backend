@@ -22,27 +22,6 @@ Servicio backend REST desarrollado con NestJS y MySQL para la plataforma de repo
   * Validación y sanitización estricta de payloads con Data Transfer Objects (DTO) y class-validator.
   * Habilitación de CORS para integración con clientes móviles (iOS/Xcode) y web.
 
-## Estructura del Proyecto
-
-smseguro-backend/
-├── database/
-│   └── smseguro_db.sql        # Script DDL/DML de la base de datos
-├── src/
-│   ├── auth/                  # Módulo de autenticación y usuarios
-│   │   ├── dto/               # Validaciones de entrada (Register, Login, Reset)
-│   │   ├── auth.controller.ts
-│   │   ├── auth.module.ts
-│   │   └── auth.service.ts
-│   ├── database/              # Módulo global de conexión MySQL
-│   │   ├── database.module.ts
-│   │   └── database.service.ts
-│   ├── app.module.ts          # Módulo principal de la aplicación
-│   └── main.ts                # Bootstrap, CORS y ValidationPipe global
-├── .env.ejemplo               # Plantilla de variables de entorno
-├── .gitignore
-├── package.json
-└── README.md
-
 ## Requisitos Previos
 - Node.js v18 o superior
 - Gestor de paquetes npm
