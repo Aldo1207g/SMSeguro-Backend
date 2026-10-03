@@ -16,4 +16,12 @@ export class ReportesService {
   async contarReportes() {
     return this.reportesRepository.contarReportes();
   }
+
+  async misEstadisticas(idUsuario: number) {
+    const total = await this.reportesRepository.contarPorUsuario(idUsuario);
+
+    return {
+      total_reportes: total,
+    };
+  }
 }
