@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { DictamenModule } from './dictamen/dictamen.module';
 import { EstadisticasModule } from './estadisticas/estadisticas.module';
+import { IndicadoresModule } from './indicadores/indicadores.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { EstadisticasModule } from './estadisticas/estadisticas.module';
     ReportesModule,
     DictamenModule,
     EstadisticasModule,
+    IndicadoresModule,
   ],
   controllers: [AppController],
   providers: [AppService],
