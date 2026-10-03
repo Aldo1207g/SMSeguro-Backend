@@ -7,6 +7,7 @@ import { ReportesModule } from './reportes/reportes.module';
 import { DictamenModule } from './dictamen/dictamen.module';
 import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { IndicadoresModule } from './indicadores/indicadores.module';
+import { CategoriasModule } from './categorias/categorias.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { IndicadoresModule } from './indicadores/indicadores.module';
     DictamenModule,
     EstadisticasModule,
     IndicadoresModule,
+    CategoriasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
