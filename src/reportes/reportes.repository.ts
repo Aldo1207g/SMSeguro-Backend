@@ -14,6 +14,16 @@ export interface ConteoCategoriaEstadoRow extends RowDataPacket {
   total: number;
 }
 
+export interface ReporteListaRow extends RowDataPacket {
+  id_reporte: number;
+  titulo: string;
+  descripcion: string;
+  url: string;
+  fecha_creacion: string;
+  id_estado_actual: number;
+  nombre_estado: string;
+}
+
 export interface ReporteDetalleRow extends RowDataPacket {
   id_reporte: number;
   folio_publico: string;
@@ -156,6 +166,34 @@ export class ReportesRepository {
   // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
   // CROSS JOIN arma todas las combinaciones de los dos catálogos (9 × 3 = 27) y el
   // LEFT JOIN cuenta los reportes de cada una; así las combinaciones vacías salen en 0.
+  // Lista los reportes activos de un usuario, con el formato que necesita la app
+  async listarPorUsuario(idUsuario: number): Promise<ReporteListaRow[]> {
+    const sql = `
+      SELECT r.id_reporte,
+             IFNULL(t.nombre_tipo, 'Sin categoria') AS titulo,
+             r.descripcion,
+             IFNULL((SELECT i.valor_dato
+                       FROM detalle_reporte dr
+                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+                      WHERE dr.id_reporte = r.id_reporte
+                        AND dr.id_rol_indicador = ?
+                      LIMIT 1), '') AS url,
+             DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
+             r.id_estado_actual,
+             e.nombre_estado
+      FROM reporte r
+      LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
+      INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
+      WHERE r.id_usuario = ? AND r.activo = TRUE
+      ORDER BY r.fecha_registro DESC
+    `;
+
+    return (await this.db.query(sql, [
+      ROL_INDICADOR_ENLACE,
+      idUsuario,
+    ])) as ReporteListaRow[];
+  }
+
   async conteoPorCategoriaYEstado(): Promise<ConteoCategoriaEstadoRow[]> {
     const sql = `
       SELECT t.id_tipo_fraude, t.nombre_tipo,

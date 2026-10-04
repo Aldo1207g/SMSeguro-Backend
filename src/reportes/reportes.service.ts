@@ -37,6 +37,21 @@ export class ReportesService {
     };
   }
 
+  // GET /reportes/mis-reportes -> lista de reportes del usuario logueado
+  async misReportes(idUsuario: number) {
+    const filas = await this.reportesRepository.listarPorUsuario(idUsuario);
+
+    return filas.map((fila) => ({
+      id_reporte: fila.id_reporte,
+      titulo: fila.titulo,
+      descripcion: fila.descripcion,
+      url: fila.url,
+      fecha_creacion: fila.fecha_creacion,
+      id_estado_actual: fila.id_estado_actual,
+      nombre_estado: fila.nombre_estado,
+    }));
+  }
+
   // GET /reportes/estadisticas/dashboard (solo Analista / Administrador)
   async dashboard() {
     const filas = await this.reportesRepository.conteoPorCategoriaYEstado();

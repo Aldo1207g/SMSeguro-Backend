@@ -46,6 +46,13 @@ export class ReportesController {
     return this.reportesService.misEstadisticas(user.sub);
   }
 
+  // Lista los reportes del usuario logueado (para la pantalla de lista de la app)
+  @Get('mis-reportes')
+  @ApiOperation({ summary: 'Lista los reportes del usuario logueado' })
+  misReportes(@CurrentUser() user: JwtPayload) {
+    return this.reportesService.misReportes(user.sub);
+  }
+
   // Herramienta interna: solo Analista y Administrador (Ciudadano -> 403)
   @Get('estadisticas/dashboard')
   @UseGuards(RolesGuard)
