@@ -46,6 +46,11 @@ export interface ReporteDetalleRow extends RowDataPacket {
   fecha_registro: string;
 }
 
+export interface CapturaRow extends RowDataPacket {
+  ruta_archivo: string;
+  mime_type: string;
+}
+
 @Injectable()
 export class ReportesRepository {
   constructor(private readonly db: DatabaseService) {}
@@ -120,7 +125,6 @@ export class ReportesRepository {
   }
 
   // Actualiza la descripción y la categoría del reporte.
-  // Usa ? (consulta parametrizada) para no ser vulnerable a inyección SQL.
   async actualizarDatos(
     idReporte: number,
     descripcion: string,
@@ -197,6 +201,19 @@ export class ReportesRepository {
     ])) as ResultSetHeader;
 
     return resultado.insertId;
+  }
+
+  // Trae la foto de evidencia mas reciente de un reporte (o null si no tiene)
+  async buscarCaptura(idReporte: number): Promise<CapturaRow | null> {
+    const sql = `
+      SELECT ruta_archivo, mime_type
+      FROM captura
+      WHERE id_reporte = ?
+      ORDER BY id_captura DESC
+      LIMIT 1
+    `;
+    const filas = (await this.db.query(sql, [idReporte])) as CapturaRow[];
+    return filas.length > 0 ? filas[0] : null;
   }
 
   // Lista TODOS los reportes pendientes (estado 1) para que el analista los revise.

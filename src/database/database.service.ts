@@ -32,7 +32,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       });
   }
 
-  // Método seguro: consultas preparadas parametrizadas (anti SQL Injection)
+  // Hace una consulta a la base de datos y regresa los resultados.
   async query(sql: string, params: any[] = []) {
     const [results] = await this.pool.execute(sql, params);
     return results;

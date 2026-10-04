@@ -7,11 +7,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -92,6 +94,18 @@ export class ReportesController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.reportesService.verDetalle(idReporte, user);
+  }
+
+  // Devuelve la foto de evidencia del reporte como imagen
+  @Get(':id/captura')
+  @ApiOperation({ summary: 'Ver la foto de evidencia de un reporte' })
+  async verCaptura(
+    @Param('id', ParseIntPipe) idReporte: number,
+    @Res() res: Response,
+  ) {
+    const captura = await this.reportesService.obtenerCaptura(idReporte);
+    res.setHeader('Content-Type', captura.mimeType);
+    res.sendFile(captura.ruta);
   }
 
   // Sube una foto de evidencia para el reporte (campo 'foto' en form-data)

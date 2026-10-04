@@ -243,6 +243,21 @@ export class ReportesService {
     }
   }
 
+  // Devuelve la ruta y el tipo de la foto de evidencia para poder mostrarla
+  async obtenerCaptura(idReporte: number) {
+    const captura = await this.reportesRepository.buscarCaptura(idReporte);
+    if (!captura) {
+      throw new NotFoundException('Este reporte no tiene foto de evidencia');
+    }
+
+    const rutaAbsoluta = path.resolve(captura.ruta_archivo);
+    if (!fs.existsSync(rutaAbsoluta)) {
+      throw new NotFoundException('No se encontro el archivo de la evidencia');
+    }
+
+    return { ruta: rutaAbsoluta, mimeType: captura.mime_type };
+  }
+
   // GET /reportes/:id
   async verDetalle(idReporte: number, user: JwtPayload) {
     const reporte = await this.obtenerReporte(idReporte);
