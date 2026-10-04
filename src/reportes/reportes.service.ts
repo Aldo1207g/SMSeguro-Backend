@@ -37,6 +37,20 @@ export class ReportesService {
     };
   }
 
+  // GET /reportes/pendientes -> bandeja del analista (solo Analista / Admin)
+  async reportesPendientes() {
+    const filas = await this.reportesRepository.listarPendientes();
+
+    return filas.map((fila) => ({
+      id_reporte: fila.id_reporte,
+      titulo: fila.titulo,
+      descripcion: fila.descripcion,
+      url: fila.url,
+      fecha_creacion: fila.fecha_creacion,
+      reportado_por: fila.reportado_por,
+    }));
+  }
+
   // GET /reportes/mis-reportes -> lista de reportes del usuario logueado
   async misReportes(idUsuario: number) {
     const filas = await this.reportesRepository.listarPorUsuario(idUsuario);

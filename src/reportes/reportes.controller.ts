@@ -46,6 +46,16 @@ export class ReportesController {
     return this.reportesService.misEstadisticas(user.sub);
   }
 
+  // Bandeja del analista: reportes pendientes de dictaminar (solo Analista / Admin)
+  @Get('pendientes')
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Reportes pendientes de dictaminar (Analista/Admin)',
+  })
+  reportesPendientes() {
+    return this.reportesService.reportesPendientes();
+  }
+
   // Lista los reportes del usuario logueado (para la pantalla de lista de la app)
   @Get('mis-reportes')
   @ApiOperation({ summary: 'Lista los reportes del usuario logueado' })

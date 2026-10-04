@@ -2,11 +2,13 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EstadisticasService } from './estadisticas.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 
 @ApiTags('Estadísticas')
 @ApiBearerAuth()
 @Controller('estadisticas')
-@UseGuards(AuthGuard)
+// Solo Analista / Administrador (un ciudadano recibe 403)
+@UseGuards(AuthGuard, RolesGuard)
 export class EstadisticasController {
   constructor(private readonly estadisticasService: EstadisticasService) {}
 
