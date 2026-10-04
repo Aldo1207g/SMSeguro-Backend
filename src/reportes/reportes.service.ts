@@ -52,6 +52,19 @@ export class ReportesService {
   }
 
   // GET /reportes/pendientes -> bandeja del analista (solo Analista / Admin)
+  async reportesPorEstado(idEstado: number) {
+    const filas = await this.reportesRepository.listarPorEstado(idEstado);
+
+    return filas.map((fila) => ({
+      id_reporte: fila.id_reporte,
+      titulo: fila.titulo,
+      descripcion: fila.descripcion,
+      url: fila.url,
+      fecha_creacion: fila.fecha_creacion,
+      reportado_por: fila.reportado_por,
+    }));
+  }
+
   async reportesPendientes() {
     const filas = await this.reportesRepository.listarPendientes();
 

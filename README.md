@@ -1,28 +1,75 @@
-## SMSeguro - API Backend
+# SMSeguro — API (Backend)
 
-Servicio backend REST desarrollado con NestJS y MySQL para la plataforma de reporte, validación comunitaria y mitigación de mensajes SMS fraudulentos (smishing)
+API REST del sistema **SMSeguro**, una plataforma para reportar y revisar
+posibles fraudes por SMS y enlaces. Los ciudadanos crean reportes desde la app
+de iOS y los analistas los revisan desde el panel web. Hecha con **NestJS** y
+**MySQL**.
 
-## Integrantes - Equipo 6
+Proyecto del curso **Seguridad informática** (TC2007B).
 
-* Aldo Gabriel Bejar Ortiz - A01669506
-* Eduardo Arteaga Camacho - A01669207
-* Denzel Zlathan López Cabrera - A01669190
-* Irving Ariel Rosas Godinez - A01803057
+## Requisitos
 
-## Materia: Integración de seguridad informática en redes y sistemas de software (TC2007B.452)
+- Node.js 20 o superior
+- MySQL 8 corriendo en `localhost:3306`
 
-## Stack Tecnológico
-- Framework: NestJS (Node.js con TypeScript)
-- Base de datos: MySQL 8 (modelo relacional normalizado a Tercera Forma Normal - 3FN)[cite: 17]
-- Conector de base de datos: mysql2/promise mediante pool de conexiones
-- Seguridad:
+## Cómo correr
 
-  * Consultas preparadas parametrizadas en capa de datos para prevención de SQL Injection.
-  * Hashing de credenciales mediante bcrypt (salting a 10 rondas).
-  * Validación y sanitización estricta de payloads con Data Transfer Objects (DTO) y class-validator.
-  * Habilitación de CORS para integración con clientes móviles (iOS/Xcode) y web.
+```bash
+npm install
+mysql -u root -p < database/smseguro_db.sql   # crea la base `smseguro`
+npm run start:dev                              # http://localhost:3000
+```
 
-## Requisitos Previos
-- Node.js v18 o superior
-- Gestor de paquetes npm
-- Servidor MySQL activo localmente (puerto 3306)
+La documentación interactiva queda en <http://localhost:3000/docs> (Swagger UI).
+
+## Configuración
+
+La conexión a MySQL se lee de un archivo `.env` en la raíz del proyecto:
+
+| Variable      | Ejemplo     | Descripción                |
+|---------------|-------------|----------------------------|
+| `DB_HOST`     | `localhost` | Host de MySQL              |
+| `DB_PORT`     | `3306`      | Puerto de MySQL            |
+| `DB_USER`     | `root`      | Usuario de MySQL           |
+| `DB_PASSWORD` | `root`      | Contraseña de MySQL        |
+| `DB_NAME`     | `smseguro`  | Nombre de la base de datos |
+
+El token JWT se firma con una llave secreta que está en el módulo `auth`.
+
+## Endpoints principales
+
+Las rutas de `/reportes` piden `Authorization: Bearer <accessToken>`. Las
+marcadas con **Analista** además requieren rol de analista o administrador.
+
+| Método | Ruta                               | Auth     | Qué hace                                 |
+|--------|------------------------------------|----------|------------------------------------------|
+| POST   | `/auth/register`                   | no       | Registra un usuario                      |
+| POST   | `/auth/login`                      | no       | Regresa accessToken y refreshToken       |
+| POST   | `/auth/refresh`                    | no       | Access token nuevo desde el refresh      |
+| GET    | `/categorias`                      | Bearer   | Lista las categorías de fraude           |
+| POST   | `/reportes`                        | Bearer   | Crea un reporte                          |
+| GET    | `/reportes/mis-reportes`           | Bearer   | Reportes del usuario logueado            |
+| POST   | `/reportes/:id/captura`            | Bearer   | Sube la foto de evidencia                |
+| GET    | `/reportes/:id/captura`            | Bearer   | Devuelve la foto de evidencia            |
+| GET    | `/reportes/pendientes`             | Analista | Bandeja de reportes por revisar          |
+| GET    | `/reportes/por-estado/:idEstado`   | Analista | Reportes por estado (2=Aprob, 3=Rechaz)  |
+| POST   | `/reportes/:id/dictamen`           | Analista | Aprueba o rechaza un reporte             |
+| GET    | `/reportes/estadisticas/dashboard` | Analista | Totales por categoría y estado           |
+
+La lista completa está en `/docs`.
+
+## Estructura
+
+```
+src/
+├── main.ts         arranque, ValidationPipe, CORS y Swagger en /docs
+├── app.module.ts
+├── database/       conexión a MySQL (mysql2)
+├── auth/           registro, login, refresh y guards (JWT)
+├── reportes/       crear, listar, subir foto y detalle de reportes
+├── dictamen/       aprobar / rechazar reportes
+├── estadisticas/   catálogos de categorías y estados
+├── categorias/     catálogo de tipos de fraude
+└── indicadores/    exportar indicadores
+database/smseguro_db.sql   script de la base de datos
+```

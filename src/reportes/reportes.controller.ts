@@ -87,6 +87,13 @@ export class ReportesController {
 
   // ⚠️ Las rutas con :id van al final para no "tapar" a /prueba, /conteo, etc.
 
+  // Lista reportes por estado (2=Aprobado, 3=Rechazado) para el panel
+  @Get('por-estado/:idEstado')
+  @UseGuards(RolesGuard)
+  reportesPorEstado(@Param('idEstado', ParseIntPipe) idEstado: number) {
+    return this.reportesService.reportesPorEstado(idEstado);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Ver detalle de un reporte' })
   verDetalle(

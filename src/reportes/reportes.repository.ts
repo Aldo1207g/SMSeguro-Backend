@@ -218,6 +218,33 @@ export class ReportesRepository {
 
   // Lista TODOS los reportes pendientes (estado 1) para que el analista los revise.
   // Incluye quién lo reportó. Los más viejos salen primero.
+  // Lista los reportes de un estado dado (1=Pendiente, 2=Aprobado, 3=Rechazado).
+  async listarPorEstado(idEstado: number): Promise<ReportePendienteRow[]> {
+    const sql = `
+      SELECT r.id_reporte,
+             IFNULL(t.nombre_tipo, 'Sin categoria') AS titulo,
+             r.descripcion,
+             IFNULL((SELECT i.valor_dato
+                       FROM detalle_reporte dr
+                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+                      WHERE dr.id_reporte = r.id_reporte
+                        AND dr.id_rol_indicador = ?
+                      LIMIT 1), '') AS url,
+             DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
+             u.nombre_usuario AS reportado_por
+      FROM reporte r
+      LEFT JOIN cat_tipo_fraude t ON t.id_tipo_fraude = r.id_tipo_fraude
+      INNER JOIN usuario u        ON u.id_usuario = r.id_usuario
+      WHERE r.id_estado_actual = ? AND r.activo = TRUE
+      ORDER BY r.fecha_registro DESC
+    `;
+
+    return (await this.db.query(sql, [
+      ROL_INDICADOR_ENLACE,
+      idEstado,
+    ])) as ReportePendienteRow[];
+  }
+
   async listarPendientes(): Promise<ReportePendienteRow[]> {
     const sql = `
       SELECT r.id_reporte,
