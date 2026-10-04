@@ -6,6 +6,14 @@ import { DatabaseService } from '../database/database.service';
 const TIPO_DATO_URL = 2;
 const ROL_INDICADOR_ENLACE = 2;
 
+export interface ConteoCategoriaEstadoRow extends RowDataPacket {
+  id_tipo_fraude: number;
+  nombre_tipo: string;
+  id_estado_reporte: number;
+  nombre_estado: string;
+  total: number;
+}
+
 export interface ReporteDetalleRow extends RowDataPacket {
   id_reporte: number;
   folio_publico: string;
@@ -92,17 +100,15 @@ export class ReportesRepository {
     return filas.length > 0;
   }
 
-  // COALESCE: si el valor llega en null, se conserva el que ya estaba
+  // Actualiza la descripción y la categoría del reporte.
+  // Usa ? (consulta parametrizada) para no ser vulnerable a inyección SQL.
   async actualizarDatos(
     idReporte: number,
-    descripcion: string | null,
+    descripcion: string,
     idTipoFraude: number | null,
   ): Promise<void> {
     await this.db.query(
-      `UPDATE reporte
-          SET descripcion = COALESCE(?, descripcion),
-              id_tipo_fraude = COALESCE(?, id_tipo_fraude)
-        WHERE id_reporte = ?`,
+      'UPDATE reporte SET descripcion = ?, id_tipo_fraude = ? WHERE id_reporte = ?',
       [descripcion, idTipoFraude, idReporte],
     );
   }
@@ -145,5 +151,26 @@ export class ReportesRepository {
       'UPDATE reporte SET activo = FALSE WHERE id_reporte = ?',
       [idReporte],
     );
+  }
+
+  // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
+  // CROSS JOIN arma todas las combinaciones de los dos catálogos (9 × 3 = 27) y el
+  // LEFT JOIN cuenta los reportes de cada una; así las combinaciones vacías salen en 0.
+  async conteoPorCategoriaYEstado(): Promise<ConteoCategoriaEstadoRow[]> {
+    const sql = `
+      SELECT t.id_tipo_fraude, t.nombre_tipo,
+             e.id_estado_reporte, e.nombre_estado,
+             COUNT(r.id_reporte) AS total
+      FROM cat_tipo_fraude t
+      CROSS JOIN cat_estado_reporte e
+      LEFT JOIN reporte r
+        ON r.id_tipo_fraude = t.id_tipo_fraude
+       AND r.id_estado_actual = e.id_estado_reporte
+       AND r.activo = TRUE
+      GROUP BY t.id_tipo_fraude, t.nombre_tipo, e.id_estado_reporte, e.nombre_estado
+      ORDER BY t.id_tipo_fraude, e.id_estado_reporte
+    `;
+
+    return (await this.db.query(sql)) as ConteoCategoriaEstadoRow[];
   }
 }

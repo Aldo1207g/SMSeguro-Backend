@@ -8,7 +8,6 @@ import {
 import { ReportesRepository } from './reportes.repository';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
-import { randomInt } from 'node:crypto';
 import type { JwtPayload } from '../auth/jwt';
 
 // cat_estado_reporte: 1 = Pendiente
@@ -35,6 +34,79 @@ export class ReportesService {
 
     return {
       total_reportes: total,
+    };
+  }
+
+  // GET /reportes/estadisticas/dashboard (solo Analista / Administrador)
+  async dashboard() {
+    const filas = await this.reportesRepository.conteoPorCategoriaYEstado();
+
+    // 1. Detalle categoria x estado (para la grafica de barras agrupada)
+    const detalle: {
+      id_tipo_fraude: number;
+      nombre_tipo: string | null;
+      id_estado_reporte: number;
+      nombre_estado: string;
+      total: number;
+    }[] = [];
+    let totalReportes = 0;
+    for (const fila of filas) {
+      const total = Number(fila.total); // COUNT() llega como texto/BIGINT
+      totalReportes += total;
+      detalle.push({
+        id_tipo_fraude: fila.id_tipo_fraude,
+        nombre_tipo: fila.nombre_tipo,
+        id_estado_reporte: fila.id_estado_reporte,
+        nombre_estado: fila.nombre_estado,
+        total,
+      });
+    }
+
+    // 2. Totales por categoria: sumamos los 3 estados de cada categoria
+    const porCategoria: {
+      id_tipo_fraude: number;
+      nombre_tipo: string | null;
+      total: number;
+    }[] = [];
+    for (const d of detalle) {
+      let cat = porCategoria.find((c) => c.id_tipo_fraude === d.id_tipo_fraude);
+      if (!cat) {
+        cat = {
+          id_tipo_fraude: d.id_tipo_fraude,
+          nombre_tipo: d.nombre_tipo,
+          total: 0,
+        };
+        porCategoria.push(cat);
+      }
+      cat.total += d.total;
+    }
+
+    // 3. Totales por estado: sumamos todas las categorias de cada estado
+    const porEstado: {
+      id_estado_reporte: number;
+      nombre_estado: string;
+      total: number;
+    }[] = [];
+    for (const d of detalle) {
+      let est = porEstado.find(
+        (e) => e.id_estado_reporte === d.id_estado_reporte,
+      );
+      if (!est) {
+        est = {
+          id_estado_reporte: d.id_estado_reporte,
+          nombre_estado: d.nombre_estado,
+          total: 0,
+        };
+        porEstado.push(est);
+      }
+      est.total += d.total;
+    }
+
+    return {
+      total_reportes: totalReportes,
+      por_categoria: porCategoria,
+      por_estado: porEstado,
+      detalle,
     };
   }
 
@@ -66,12 +138,13 @@ export class ReportesService {
 
   // Folio público de 12 caracteres (CHAR(12)), ej. "SMS-7K2QX9AB"
   private generarFolio(): string {
-    const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let codigo = '';
     for (let i = 0; i < 8; i++) {
-      codigo += caracteres[randomInt(caracteres.length)];
+      const indice = Math.floor(Math.random() * caracteres.length);
+      codigo += caracteres[indice];
     }
-    return `SMS-${codigo}`;
+    return 'SMS-' + codigo;
   }
 
   // GET /reportes/:id
@@ -93,7 +166,7 @@ export class ReportesService {
     dto: ActualizarReporteDto,
     idUsuario: number,
   ) {
-    await this.obtenerReporteEditable(idReporte, idUsuario);
+    const reporte = await this.obtenerReporteEditable(idReporte, idUsuario);
 
     if (
       dto.url === undefined &&
@@ -112,10 +185,14 @@ export class ReportesService {
       }
     }
 
+    // Si un campo no viene en el body, dejamos el valor que ya tenía el reporte
+    const descripcion = dto.descripcion ?? reporte.descripcion;
+    const idTipoFraude = dto.id_tipo_fraude ?? reporte.id_tipo_fraude;
+
     await this.reportesRepository.actualizarDatos(
       idReporte,
-      dto.descripcion ?? null,
-      dto.id_tipo_fraude ?? null,
+      descripcion,
+      idTipoFraude,
     );
 
     if (dto.url !== undefined) {

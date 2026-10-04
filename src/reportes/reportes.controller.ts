@@ -9,9 +9,15 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ReportesService } from './reportes.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtPayload } from '../auth/jwt';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
@@ -38,6 +44,17 @@ export class ReportesController {
   @Get('mis-estadisticas')
   misEstadisticas(@CurrentUser() user: JwtPayload) {
     return this.reportesService.misEstadisticas(user.sub);
+  }
+
+  // Herramienta interna: solo Analista y Administrador (Ciudadano -> 403)
+  @Get('estadisticas/dashboard')
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Dashboard: reportes por categoría y por estado (Analista/Admin)',
+  })
+  @ApiForbiddenResponse({ description: 'El rol del usuario no tiene acceso' })
+  dashboard() {
+    return this.reportesService.dashboard();
   }
 
   // El autor sale del token, nunca del body

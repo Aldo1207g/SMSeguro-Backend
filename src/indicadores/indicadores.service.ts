@@ -32,7 +32,9 @@ export class IndicadoresService {
     return BOM + [ENCABEZADOS.join(','), ...lineas].join('\n') + '\n';
   }
 
-  // Convierte un valor a un campo CSV seguro (RFC 4180 + protección de Excel)
+  // Prepara un valor para ponerlo en el CSV.
+  // Si el valor trae una coma o comillas, lo encerramos entre comillas dobles
+  // para que no se rompan las columnas al abrirlo en Excel.
   escaparCampoCsv(valor: string | number | null | undefined): string {
     if (valor === null || valor === undefined) {
       return '';
@@ -40,19 +42,8 @@ export class IndicadoresService {
 
     let texto = String(valor);
 
-    // 1. Inyección de fórmulas: los valores vienen de SMS de estafadores.
-    //    Si una "URL" empieza con =, +, -, @ Excel podría ejecutarla como
-    //    fórmula al abrir el archivo. Se antepone ' para que sea texto.
-    //    Excepción: teléfonos como "+52 55 1234 5678" se dejan intactos.
-    const esTelefono = /^\+?[\d\s()-]+$/.test(texto);
-    if (/^[=+\-@\t\r]/.test(texto) && !esTelefono) {
-      texto = `'${texto}`;
-    }
-
-    // 2. Si el campo tiene coma, comillas o salto de línea, se encierra
-    //    entre comillas dobles y las comillas internas se duplican.
-    if (/[",\n\r]/.test(texto)) {
-      texto = `"${texto.replace(/"/g, '""')}"`;
+    if (texto.includes(',') || texto.includes('"')) {
+      texto = '"' + texto.replace(/"/g, '""') + '"';
     }
 
     return texto;
