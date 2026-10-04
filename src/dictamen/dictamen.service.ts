@@ -8,8 +8,13 @@ import {
 import { DictamenRepository } from './dictamen.repository';
 import {
   CrearDictamenDto,
+  RESOLUCION_APROBADO,
   RESOLUCION_RECHAZADO,
 } from './dto/crear-dictamen.dto';
+
+// Estados del reporte (cat_estado_reporte)
+const ESTADO_APROBADO = 2;
+const ESTADO_RECHAZADO = 3;
 
 @Injectable()
 export class DictamenService {
@@ -51,6 +56,17 @@ export class DictamenService {
         idAnalista,
         dto.id_resolucion,
         motivoRechazo,
+      );
+
+      // Cerramos el ciclo: el reporte deja de estar "Pendiente" y pasa
+      // a Aprobado o Rechazado, segun la resolucion del analista.
+      const nuevoEstado =
+        dto.id_resolucion === RESOLUCION_APROBADO
+          ? ESTADO_APROBADO
+          : ESTADO_RECHAZADO;
+      await this.dictamenRepository.actualizarEstadoReporte(
+        idReporte,
+        nuevoEstado,
       );
 
       const dictamen = await this.dictamenRepository.buscarPorId(idDictamen);

@@ -64,6 +64,17 @@ export class DictamenRepository {
     return resultado.insertId;
   }
 
+  // Cambia el estado del reporte (1=Pendiente, 2=Aprobado, 3=Rechazado)
+  async actualizarEstadoReporte(
+    idReporte: number,
+    idEstado: number,
+  ): Promise<void> {
+    await this.db.query(
+      'UPDATE reporte SET id_estado_actual = ? WHERE id_reporte = ?',
+      [idEstado, idReporte],
+    );
+  }
+
   async buscarPorId(idDictamen: number): Promise<DictamenRow | null> {
     const sql = `
       SELECT d.id_dictamen, d.id_reporte, d.id_analista, d.id_resolucion,
