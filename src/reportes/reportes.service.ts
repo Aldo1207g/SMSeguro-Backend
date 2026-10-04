@@ -3,12 +3,26 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { ReportesRepository } from './reportes.repository';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
 import type { JwtPayload } from '../auth/jwt';
+
+// Campos del archivo que nos interesan (los manda multer)
+export interface ArchivoSubido {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
+const TAM_MAXIMO = 5 * 1024 * 1024; // 5 MB (igual que el CHECK de la tabla)
 
 // cat_estado_reporte: 1 = Pendiente
 const ESTADO_PENDIENTE = 1;
@@ -174,6 +188,59 @@ export class ReportesService {
       codigo += caracteres[indice];
     }
     return 'SMS-' + codigo;
+  }
+
+  // POST /reportes/:id/captura -> guarda una foto de evidencia del reporte
+  async subirCaptura(idReporte: number, archivo?: ArchivoSubido) {
+    // 1. Que venga un archivo
+    if (!archivo) {
+      throw new BadRequestException('No se envió ninguna imagen');
+    }
+
+    // 2. Que sea una imagen y no pese más de 5 MB
+    if (!archivo.mimetype.startsWith('image/')) {
+      throw new BadRequestException('El archivo debe ser una imagen');
+    }
+    if (archivo.size > TAM_MAXIMO) {
+      throw new BadRequestException('La imagen no puede pesar más de 5 MB');
+    }
+
+    // 3. Que el reporte exista (obtenerReporte lanza 404 si no)
+    await this.obtenerReporte(idReporte);
+
+    // 4. Calcular el hash (huella única) del archivo
+    const hash = createHash('sha256').update(archivo.buffer).digest('hex');
+
+    // 5. Guardar el archivo en la carpeta uploads/
+    const carpeta = 'uploads';
+    fs.mkdirSync(carpeta, { recursive: true });
+    const extension = archivo.mimetype === 'image/png' ? 'png' : 'jpg';
+    const nombreArchivo = `${hash}.${extension}`;
+    const rutaArchivo = path.join(carpeta, nombreArchivo);
+    fs.writeFileSync(rutaArchivo, archivo.buffer);
+
+    // 6. Registrar la captura en la base de datos
+    try {
+      const idCaptura = await this.reportesRepository.crearCaptura(
+        idReporte,
+        rutaArchivo,
+        archivo.size,
+        archivo.mimetype,
+        hash,
+      );
+
+      return {
+        mensaje: 'Evidencia subida exitosamente',
+        id_captura: idCaptura,
+        ruta_archivo: rutaArchivo,
+      };
+    } catch (error) {
+      // El hash es UNIQUE: si ya existe esa misma imagen, avisamos
+      if ((error as { code?: string })?.code === 'ER_DUP_ENTRY') {
+        throw new ConflictException('Esta imagen ya fue subida antes');
+      }
+      throw new InternalServerErrorException('Error al guardar la evidencia');
+    }
   }
 
   // GET /reportes/:id

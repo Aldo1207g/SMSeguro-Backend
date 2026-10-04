@@ -175,6 +175,30 @@ export class ReportesRepository {
   // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
   // CROSS JOIN arma todas las combinaciones de los dos catálogos (9 × 3 = 27) y el
   // LEFT JOIN cuenta los reportes de cada una; así las combinaciones vacías salen en 0.
+  // Guarda los datos de una foto de evidencia en la tabla captura
+  async crearCaptura(
+    idReporte: number,
+    rutaArchivo: string,
+    tamanoBytes: number,
+    mimeType: string,
+    hashArchivo: string,
+  ): Promise<number> {
+    const sql = `
+      INSERT INTO captura (id_reporte, ruta_archivo, tamano_bytes, mime_type, hash_archivo)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+
+    const resultado = (await this.db.query(sql, [
+      idReporte,
+      rutaArchivo,
+      tamanoBytes,
+      mimeType,
+      hashArchivo,
+    ])) as ResultSetHeader;
+
+    return resultado.insertId;
+  }
+
   // Lista TODOS los reportes pendientes (estado 1) para que el analista los revise.
   // Incluye quién lo reportó. Los más viejos salen primero.
   async listarPendientes(): Promise<ReportePendienteRow[]> {

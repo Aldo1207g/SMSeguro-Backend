@@ -7,8 +7,11 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -22,6 +25,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtPayload } from '../auth/jwt';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
+import type { ArchivoSubido } from './reportes.service';
 
 @ApiTags('Reportes')
 @ApiBearerAuth()
@@ -46,23 +50,6 @@ export class ReportesController {
     return this.reportesService.misEstadisticas(user.sub);
   }
 
-  // Bandeja del analista: reportes pendientes de dictaminar (solo Analista / Admin)
-  @Get('pendientes')
-  @UseGuards(RolesGuard)
-  @ApiOperation({
-    summary: 'Reportes pendientes de dictaminar (Analista/Admin)',
-  })
-  reportesPendientes() {
-    return this.reportesService.reportesPendientes();
-  }
-
-  // Lista los reportes del usuario logueado (para la pantalla de lista de la app)
-  @Get('mis-reportes')
-  @ApiOperation({ summary: 'Lista los reportes del usuario logueado' })
-  misReportes(@CurrentUser() user: JwtPayload) {
-    return this.reportesService.misReportes(user.sub);
-  }
-
   // Herramienta interna: solo Analista y Administrador (Ciudadano -> 403)
   @Get('estadisticas/dashboard')
   @UseGuards(RolesGuard)
@@ -81,6 +68,21 @@ export class ReportesController {
     return this.reportesService.crear(dto, user.sub);
   }
 
+  // Lista los reportes del usuario logueado (para la pantalla de lista de la app)
+  @Get('mis-reportes')
+  @ApiOperation({ summary: 'Lista los reportes del usuario logueado' })
+  misReportes(@CurrentUser() user: JwtPayload) {
+    return this.reportesService.misReportes(user.sub);
+  }
+
+  // Bandeja del analista: reportes pendientes (solo Analista / Admin)
+  @Get('pendientes')
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: 'Reportes pendientes de dictaminar (Analista/Admin)' })
+  reportesPendientes() {
+    return this.reportesService.reportesPendientes();
+  }
+
   // ⚠️ Las rutas con :id van al final para no "tapar" a /prueba, /conteo, etc.
 
   @Get(':id')
@@ -92,16 +94,23 @@ export class ReportesController {
     return this.reportesService.verDetalle(idReporte, user);
   }
 
-  @Patch(':id')
-  @ApiOperation({
-    summary: 'Editar URL, descripción o categoría de un reporte',
-  })
-  editar(
+  // Sube una foto de evidencia para el reporte (campo 'foto' en form-data)
+  @Post(':id/captura')
+  @UseInterceptors(FileInterceptor('foto'))
+  @ApiOperation({ summary: 'Subir foto de evidencia de un reporte' })
+  subirCaptura(
     @Param('id', ParseIntPipe) idReporte: number,
-    @Body() dto: ActualizarReporteDto,
-    @CurrentUser() user: JwtPayload,
+    @UploadedFile() foto: ArchivoSubido,
   ) {
-    return this.reportesService.editar(idReporte, dto, user.sub);
+    return this.reportesService.subirCaptura(idReporte, foto);
+  }
+
+  @Patch(':id')
+  editarInseguro(
+    @Param('id', ParseIntPipe) idReporte: number,
+    @Body() dto: any,
+  ) {
+    return this.reportesService.editar(idReporte, dto, dto.id_usuario);
   }
 
   @Delete(':id')
