@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
   MaxLength,
@@ -32,4 +33,13 @@ export class CrearReporteDto {
   @IsInt({ message: 'La categoría debe ser un número entero' })
   @Min(1, { message: 'La categoría no es válida' })
   id_tipo_fraude: number;
+
+  // Numero/remitente del SMS (opcional). Se guarda como indicador "Telefono".
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString({ message: 'El teléfono debe ser texto' })
+  @MaxLength(50, { message: 'El teléfono no puede exceder 50 caracteres' })
+  telefono?: string;
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Header, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -16,6 +16,14 @@ import { AuthGuard } from '../auth/auth.guard';
 @UseGuards(AuthGuard)
 export class IndicadoresController {
   constructor(private readonly indicadoresService: IndicadoresService) {}
+
+  @Get('buscar')
+  @ApiOperation({
+    summary: 'Buscador público: ¿esta URL o número ya fue reportado?',
+  })
+  buscar(@Query('valor') valor: string) {
+    return this.indicadoresService.buscar(valor ?? '');
+  }
 
   @Get('exportar')
   @Header('Content-Type', 'text/csv; charset=utf-8')

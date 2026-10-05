@@ -48,4 +48,28 @@ export class IndicadoresService {
 
     return texto;
   }
+  // Buscador publico: dice si un valor (URL o numero) ya fue reportado
+  async buscar(valor: string) {
+    const texto = (valor ?? '').trim();
+    if (texto === '') {
+      return {
+        valor: '',
+        encontrado: false,
+        total_reportes: 0,
+        aprobados: 0,
+        rechazados: 0,
+      };
+    }
+    const fila = await this.indicadoresRepository.buscarAmenaza(texto);
+    const total = Number(fila.total_reportes) || 0;
+    const aprobados = Number(fila.aprobados) || 0;
+    const rechazados = Number(fila.rechazados) || 0;
+    return {
+      valor: texto,
+      encontrado: total > 0,
+      total_reportes: total,
+      aprobados,
+      rechazados,
+    };
+  }
 }

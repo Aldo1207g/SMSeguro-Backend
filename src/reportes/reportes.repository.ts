@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { DatabaseService } from '../database/database.service';
 
-// cat_tipo_dato: 2 = URL | cat_rol_indicador: 2 = Enlace
+// cat_tipo_dato: 1 = Telefono, 2 = URL | cat_rol_indicador: 1 = Remitente, 2 = Enlace
 const TIPO_DATO_URL = 2;
 const ROL_INDICADOR_ENLACE = 2;
+const TIPO_DATO_TELEFONO = 1;
+const ROL_INDICADOR_REMITENTE = 1;
 
 export interface ConteoCategoriaEstadoRow extends RowDataPacket {
   id_tipo_fraude: number;
@@ -169,6 +171,35 @@ export class ReportesRepository {
     await this.db.query(
       'INSERT INTO detalle_reporte (id_reporte, id_indicador, id_rol_indicador) VALUES (?, ?, ?)',
       [idReporte, idIndicador, ROL_INDICADOR_ENLACE],
+    );
+  }
+
+  // Guarda el telefono/remitente como indicador "Telefono" con rol "Remitente"
+  async reemplazarTelefono(idReporte: number, telefono: string): Promise<void> {
+    const existentes = (await this.db.query(
+      'SELECT id_indicador FROM indicador WHERE valor_dato = ?',
+      [telefono],
+    )) as RowDataPacket[];
+
+    let idIndicador: number;
+    if (existentes.length > 0) {
+      idIndicador = Number(existentes[0].id_indicador);
+    } else {
+      const insertado = (await this.db.query(
+        'INSERT INTO indicador (id_tipo_dato, valor_dato) VALUES (?, ?)',
+        [TIPO_DATO_TELEFONO, telefono],
+      )) as ResultSetHeader;
+      idIndicador = insertado.insertId;
+    }
+
+    await this.db.query(
+      'DELETE FROM detalle_reporte WHERE id_reporte = ? AND id_rol_indicador = ?',
+      [idReporte, ROL_INDICADOR_REMITENTE],
+    );
+
+    await this.db.query(
+      'INSERT INTO detalle_reporte (id_reporte, id_indicador, id_rol_indicador) VALUES (?, ?, ?)',
+      [idReporte, idIndicador, ROL_INDICADOR_REMITENTE],
     );
   }
 

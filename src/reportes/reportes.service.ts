@@ -186,6 +186,14 @@ export class ReportesService {
     // La URL se guarda como indicador "Enlace" del reporte
     await this.reportesRepository.reemplazarUrl(idReporte, dto.url);
 
+    // Si el usuario puso un telefono/remitente, lo guardamos como indicador
+    if (dto.telefono && dto.telefono.trim() !== '') {
+      await this.reportesRepository.reemplazarTelefono(
+        idReporte,
+        dto.telefono.trim(),
+      );
+    }
+
     return {
       mensaje: 'Reporte creado exitosamente',
       reporte: await this.reportesRepository.buscarDetalle(idReporte),

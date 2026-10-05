@@ -12,6 +12,12 @@ export interface IndicadorListaNegraRow extends RowDataPacket {
   ultima_confirmacion: string;
 }
 
+export interface BusquedaAmenazaRow extends RowDataPacket {
+  total_reportes: number;
+  aprobados: number;
+  rechazados: number;
+}
+
 @Injectable()
 export class IndicadoresRepository {
   constructor(private readonly db: DatabaseService) {}
@@ -41,5 +47,21 @@ export class IndicadoresRepository {
     return (await this.db.query(sql, [
       RESOLUCION_APROBADO,
     ])) as IndicadorListaNegraRow[];
+  }
+  // Busca cuantas veces se ha reportado un valor (URL o numero) y como
+  // quedaron esos reportes: Aprobados (estado 2) y Rechazados (estado 3).
+  // Lo que no es aprobado ni rechazado se asume Pendiente (en revision).
+  async buscarAmenaza(valor: string): Promise<BusquedaAmenazaRow> {
+    const sql = `
+      SELECT COUNT(DISTINCT r.id_reporte) AS total_reportes,
+             SUM(CASE WHEN r.id_estado_actual = 2 THEN 1 ELSE 0 END) AS aprobados,
+             SUM(CASE WHEN r.id_estado_actual = 3 THEN 1 ELSE 0 END) AS rechazados
+      FROM indicador i
+      INNER JOIN detalle_reporte dr ON dr.id_indicador = i.id_indicador
+      INNER JOIN reporte r          ON r.id_reporte = dr.id_reporte
+      WHERE i.valor_dato = ? AND r.activo = TRUE
+    `;
+    const filas = (await this.db.query(sql, [valor])) as BusquedaAmenazaRow[];
+    return filas[0];
   }
 }
