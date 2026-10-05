@@ -43,6 +43,7 @@ export interface ReporteDetalleRow extends RowDataPacket {
   nombre_tipo: string | null;
   id_estado_actual: number;
   nombre_estado: string;
+  motivo_rechazo: string | null;
   fecha_registro: string;
 }
 
@@ -84,6 +85,10 @@ export class ReportesRepository {
                LIMIT 1) AS url,
              r.id_tipo_fraude, t.nombre_tipo,
              r.id_estado_actual, e.nombre_estado,
+             (SELECT d.motivo_rechazo
+                FROM dictamen d
+               WHERE d.id_reporte = r.id_reporte
+               LIMIT 1) AS motivo_rechazo,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d %H:%i:%s') AS fecha_registro
       FROM reporte r
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude

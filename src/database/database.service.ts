@@ -21,10 +21,22 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       queueLimit: 0,
     });
 
-    // Probar conexión inicial
+    // Probar conexión inicial y crear la tabla de consejos si todavía no existe
     this.pool.getConnection()
-      .then((conn) => {
+      .then(async (conn) => {
         this.logger.log('Conexión exitosa a la base de datos MySQL (smseguro)');
+        // La tabla consejo guarda las guías que publican los analistas
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS consejo (
+            id_consejo INT AUTO_INCREMENT PRIMARY KEY,
+            id_analista INT NOT NULL,
+            titulo VARCHAR(150) NOT NULL,
+            contenido TEXT NOT NULL,
+            activo BOOLEAN DEFAULT TRUE,
+            fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_analista) REFERENCES usuario(id_usuario)
+          )
+        `);
         conn.release();
       })
       .catch((err) => {

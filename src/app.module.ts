@@ -8,6 +8,7 @@ import { DictamenModule } from './dictamen/dictamen.module';
 import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { IndicadoresModule } from './indicadores/indicadores.module';
 import { CategoriasModule } from './categorias/categorias.module';
+import { ConsejosModule } from './consejos/consejos.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CategoriasModule } from './categorias/categorias.module';
     EstadisticasModule,
     IndicadoresModule,
     CategoriasModule,
+    ConsejosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { RowDataPacket } from 'mysql2/promise';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { DatabaseService } from '../database/database.service';
 
 export interface CategoriaRow extends RowDataPacket {
@@ -18,5 +18,13 @@ export class CategoriasRepository {
     );
 
     return filas as CategoriaRow[];
+  }
+  // Agrega una categoria nueva al catalogo y regresa su id
+  async crear(nombreTipo: string): Promise<number> {
+    const resultado = (await this.db.query(
+      'INSERT INTO cat_tipo_fraude (nombre_tipo) VALUES (?)',
+      [nombreTipo],
+    )) as ResultSetHeader;
+    return resultado.insertId;
   }
 }
