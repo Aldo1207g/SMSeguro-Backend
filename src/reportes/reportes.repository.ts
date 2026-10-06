@@ -21,6 +21,7 @@ export interface ReporteListaRow extends RowDataPacket {
   titulo: string;
   descripcion: string;
   url: string;
+  telefono: string;
   fecha_creacion: string;
   id_estado_actual: number;
   nombre_estado: string;
@@ -46,6 +47,7 @@ export interface ReporteDetalleRow extends RowDataPacket {
   id_estado_actual: number;
   nombre_estado: string;
   motivo_rechazo: string | null;
+  telefono: string | null;
   fecha_registro: string;
 }
 
@@ -85,6 +87,11 @@ export class ReportesRepository {
                 INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
                WHERE dr.id_reporte = r.id_reporte AND dr.id_rol_indicador = ?
                LIMIT 1) AS url,
+             (SELECT i.valor_dato
+                FROM detalle_reporte dr
+                INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+               WHERE dr.id_reporte = r.id_reporte AND dr.id_rol_indicador = ?
+               LIMIT 1) AS telefono,
              r.id_tipo_fraude, t.nombre_tipo,
              r.id_estado_actual, e.nombre_estado,
              (SELECT d.motivo_rechazo
@@ -100,6 +107,7 @@ export class ReportesRepository {
 
     const filas = (await this.db.query(sql, [
       ROL_INDICADOR_ENLACE,
+      ROL_INDICADOR_REMITENTE,
       idReporte,
     ])) as ReporteDetalleRow[];
 
@@ -318,6 +326,12 @@ export class ReportesRepository {
                       WHERE dr.id_reporte = r.id_reporte
                         AND dr.id_rol_indicador = ?
                       LIMIT 1), '') AS url,
+             IFNULL((SELECT i.valor_dato
+                       FROM detalle_reporte dr
+                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+                      WHERE dr.id_reporte = r.id_reporte
+                        AND dr.id_rol_indicador = ?
+                      LIMIT 1), '') AS telefono,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
              r.id_estado_actual,
              e.nombre_estado
@@ -330,6 +344,7 @@ export class ReportesRepository {
 
     return (await this.db.query(sql, [
       ROL_INDICADOR_ENLACE,
+      ROL_INDICADOR_REMITENTE,
       idUsuario,
     ])) as ReporteListaRow[];
   }

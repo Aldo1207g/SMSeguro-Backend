@@ -9,15 +9,20 @@ import {
   Min,
 } from 'class-validator';
 
-// POST /reportes: mismos campos que el formulario NuevoReporteView de la app
+// POST /reportes: mismos campos que el formulario NuevoReporteView de la app.
+// La URL y el telefono son opcionales por separado, pero el servicio exige
+// que venga al menos uno de los dos (es una app contra smishing).
 export class CrearReporteDto {
-  @IsNotEmpty({ message: 'La URL es obligatoria' })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsUrl(
     { require_protocol: true },
     { message: 'La URL no es válida (debe iniciar con http:// o https://)' },
   )
   @MaxLength(255, { message: 'La URL no puede exceder 255 caracteres' })
-  url: string;
+  url?: string;
 
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,

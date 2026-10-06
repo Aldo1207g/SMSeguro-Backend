@@ -87,6 +87,7 @@ export class ReportesService {
       titulo: fila.titulo,
       descripcion: fila.descripcion,
       url: fila.url,
+      telefono: fila.telefono,
       fecha_creacion: fila.fecha_creacion,
       id_estado_actual: fila.id_estado_actual,
       nombre_estado: fila.nombre_estado,
@@ -175,6 +176,15 @@ export class ReportesService {
       throw new BadRequestException('La categoría indicada no existe');
     }
 
+    // Debe venir al menos una URL o un telefono/remitente
+    const url = dto.url?.trim() ?? '';
+    const telefono = dto.telefono?.trim() ?? '';
+    if (url === '' && telefono === '') {
+      throw new BadRequestException(
+        'Debes reportar al menos una URL o un teléfono/remitente',
+      );
+    }
+
     const folio = this.generarFolio();
     const idReporte = await this.reportesRepository.crear(
       idUsuario,
@@ -183,15 +193,14 @@ export class ReportesService {
       dto.id_tipo_fraude,
     );
 
-    // La URL se guarda como indicador "Enlace" del reporte
-    await this.reportesRepository.reemplazarUrl(idReporte, dto.url);
+    // Si el usuario puso una URL, se guarda como indicador "Enlace"
+    if (url !== '') {
+      await this.reportesRepository.reemplazarUrl(idReporte, url);
+    }
 
     // Si el usuario puso un telefono/remitente, lo guardamos como indicador
-    if (dto.telefono && dto.telefono.trim() !== '') {
-      await this.reportesRepository.reemplazarTelefono(
-        idReporte,
-        dto.telefono.trim(),
-      );
+    if (telefono !== '') {
+      await this.reportesRepository.reemplazarTelefono(idReporte, telefono);
     }
 
     return {
