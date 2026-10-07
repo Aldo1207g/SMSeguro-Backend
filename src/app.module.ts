@@ -7,7 +7,7 @@ import { IndicadoresModule } from './indicadores/indicadores.module';
 import { GuiasModule } from './guias/guias.module'
 
 @Module({
-  imports: [DatabaseModule, AuthModule],
+  imports: [DatabaseModule, AuthModule, IndicadoresModule, GuiasModule],
   controllers: [AppController],
   providers: [AppService],
 })
