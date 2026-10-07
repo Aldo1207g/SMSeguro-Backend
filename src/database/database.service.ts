@@ -1,8 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import * as mysql from 'mysql2/promise';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -11,17 +8,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     this.pool = mysql.createPool({
-      host: process.env.DB_HOST || 'localhost',
-      port: Number(process.env.DB_PORT) || 3306,
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || 'smseguro',
+      host: 'localhost',
+      port: 3306,
+      user: 'root',
+      password: 'root', 
+      database: 'smseguro',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
     });
 
-    // Probar conexión inicial
     this.pool.getConnection()
       .then((conn) => {
         this.logger.log('Conexión exitosa a la base de datos MySQL (smseguro)');
@@ -32,7 +28,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       });
   }
 
-  // Método seguro: consultas preparadas parametrizadas (anti SQL Injection)
   async query(sql: string, params: any[] = []) {
     const [results] = await this.pool.execute(sql, params);
     return results;
