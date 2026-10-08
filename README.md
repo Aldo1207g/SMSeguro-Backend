@@ -15,12 +15,16 @@ Servicio backend REST desarrollado con NestJS y MySQL para la plataforma de repo
 - Framework: NestJS (Node.js con TypeScript)
 - Base de datos: MySQL 8 (modelo relacional normalizado a Tercera Forma Normal - 3FN)[cite: 17]
 - Conector de base de datos: mysql2/promise mediante pool de conexiones
-- Seguridad:
+- Estado de seguridad (entorno de prácticas, pendiente de endurecer):
 
-  * Consultas preparadas parametrizadas en capa de datos para prevención de SQL Injection.
-  * Hashing de credenciales mediante bcrypt (salting a 10 rondas).
-  * Validación y sanitización estricta de payloads con Data Transfer Objects (DTO) y class-validator.
+  * Las consultas SQL se arman por interpolación de strings en la capa de datos; aún no se parametrizan.
+  * El hash de credenciales usa SHA-256 sin salt; todavía no se migra a bcrypt.
+  * Las credenciales de la base de datos están escritas directamente en el código (sin variables de entorno).
+  * Validación de payloads con Data Transfer Objects (DTO) y class-validator.
   * Habilitación de CORS para integración con clientes móviles (iOS/Xcode) y web.
+
+  > Nota: este repositorio es el entorno base para la fase de auditoría de seguridad
+  > del curso. Los puntos anteriores se corregirán como parte de ese ejercicio.
 
 ## Requisitos Previos
 - Node.js v18 o superior
