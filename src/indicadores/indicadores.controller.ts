@@ -1,5 +1,5 @@
 import { Controller, Get, Res } from '@nestjs/common';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { IndicadoresService } from './indicadores.service';
 
 @Controller('indicadores')

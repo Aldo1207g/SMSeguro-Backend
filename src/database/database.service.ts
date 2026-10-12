@@ -11,7 +11,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       host: 'localhost',
       port: 3306,
       user: 'root',
-      password: 'root', 
+      password: 'xbox2014', 
       database: 'smseguro',
       waitForConnections: true,
       connectionLimit: 10,
