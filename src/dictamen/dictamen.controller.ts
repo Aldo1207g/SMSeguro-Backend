@@ -11,11 +11,12 @@ import {
 import { DictamenService } from './dictamen.service';
 import { CrearDictamenDto } from './dto/crear-dictamen.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtPayload } from '../auth/jwt';
 
 @Controller('reportes')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class DictamenController {
   constructor(private readonly dictamenService: DictamenService) {}
 

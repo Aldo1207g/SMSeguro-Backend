@@ -9,11 +9,10 @@ import {
 } from '@nestjs/swagger';
 import { IndicadoresService } from './indicadores.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 
 @ApiTags('Indicadores')
-@ApiBearerAuth()
 @Controller('indicadores')
-@UseGuards(AuthGuard)
 export class IndicadoresController {
   constructor(private readonly indicadoresService: IndicadoresService) {}
 
@@ -26,6 +25,8 @@ export class IndicadoresController {
   }
 
   @Get('exportar')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard, RolesGuard)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="lista_negra.csv"')
   @ApiOperation({
