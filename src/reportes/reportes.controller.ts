@@ -108,9 +108,13 @@ export class ReportesController {
   @ApiOperation({ summary: 'Ver la foto de evidencia de un reporte' })
   async verCaptura(
     @Param('id', ParseIntPipe) idReporte: number,
+    @CurrentUser() user: JwtPayload,
     @Res() res: Response,
   ) {
-    const captura = await this.reportesService.obtenerCaptura(idReporte);
+    const captura = await this.reportesService.obtenerCaptura(
+      idReporte,
+      user,
+    );
     res.setHeader('Content-Type', captura.mimeType);
     res.sendFile(captura.ruta);
   }
@@ -121,9 +125,14 @@ export class ReportesController {
   @ApiOperation({ summary: 'Subir foto de evidencia de un reporte' })
   subirCaptura(
     @Param('id', ParseIntPipe) idReporte: number,
+    @CurrentUser() user: JwtPayload,
     @UploadedFile() foto: ArchivoSubido,
   ) {
-    return this.reportesService.subirCaptura(idReporte, foto);
+    return this.reportesService.subirCaptura(
+      idReporte,
+      user.sub,
+      foto,
+    );
   }
 
   @Patch(':id')

@@ -221,7 +221,12 @@ export class ReportesService {
   }
 
   // POST /reportes/:id/captura -> guarda una foto de evidencia del reporte
-  async subirCaptura(idReporte: number, archivo?: ArchivoSubido) {
+  async subirCaptura(
+    idReporte: number,
+    idUsuario: number,
+    archivo?: ArchivoSubido,
+  ) {
+    await this.obtenerReporteEditable(idReporte, idUsuario);
     // 1. Que venga un archivo
     if (!archivo) {
       throw new BadRequestException('No se envió ninguna imagen');
@@ -274,7 +279,8 @@ export class ReportesService {
   }
 
   // Devuelve la ruta y el tipo de la foto de evidencia para poder mostrarla
-  async obtenerCaptura(idReporte: number) {
+  async obtenerCaptura(idReporte: number, user: JwtPayload) {
+    await this.verDetalle(idReporte, user);
     const captura = await this.reportesRepository.buscarCaptura(idReporte);
     if (!captura) {
       throw new NotFoundException('Este reporte no tiene foto de evidencia');
