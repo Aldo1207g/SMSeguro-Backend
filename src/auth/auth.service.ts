@@ -9,7 +9,12 @@ import { DatabaseService } from '../database/database.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
+import { sign, verify } from './jwt';
+import { RefreshDto } from './dto/refresh.dto';
+
+const ACCESS_TTL = 15 * 60; // 15 minutos
+const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 días
 
 @Injectable()
 export class AuthService {
@@ -17,18 +22,28 @@ export class AuthService {
 
   async registrar(dto: RegisterDto) {
     const usuarioExistente = await this.db.query(
-      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`
+      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`,
     );
 
     if (Array.isArray(usuarioExistente) && usuarioExistente.length > 0) {
       throw new ConflictException('El correo electrónico ya está registrado');
     }
 
-    const contrasenaHash = crypto.createHash('sha256').update(dto.contrasena).digest('hex');
+    const contrasenaHash = await bcrypt.hash(dto.contrasena, 10);
 
     const sql = `
-      INSERT INTO usuario (nombre_usuario, correo_electronico, contrasena_hash, id_rol_usuario)
-      VALUES ('${dto.nombre_usuario}', '${dto.correo_electronico}', '${contrasenaHash}', 1)
+      INSERT INTO usuario (
+        nombre_usuario,
+        correo_electronico,
+        contrasena_hash,
+        id_rol_usuario
+      )
+      VALUES (
+        '${dto.nombre_usuario}',
+        '${dto.correo_electronico}',
+        '${contrasenaHash}',
+        1
+      )
     `;
 
     try {
@@ -47,13 +62,20 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-  
     const sql = `
-      SELECT u.id_usuario, u.nombre_usuario, u.correo_electronico, u.contrasena_hash, u.activo, r.nombre_rol
+      SELECT
+        u.id_usuario,
+        u.nombre_usuario,
+        u.correo_electronico,
+        u.contrasena_hash,
+        u.activo,
+        r.nombre_rol
       FROM usuario u
-      INNER JOIN cat_rol_usuario r ON u.id_rol_usuario = r.id_rol_usuario
+      INNER JOIN cat_rol_usuario r
+        ON u.id_rol_usuario = r.id_rol_usuario
       WHERE u.correo_electronico = '${dto.correo_electronico}'
     `;
+
     const usuarios: any = await this.db.query(sql);
 
     if (!Array.isArray(usuarios) || usuarios.length === 0) {
@@ -66,12 +88,30 @@ export class AuthService {
       throw new UnauthorizedException('Tu cuenta se encuentra inactiva');
     }
 
-    const hashIngresado = crypto.createHash('sha256').update(dto.contrasena).digest('hex');
-    const coincide = hashIngresado === usuario.contrasena_hash;
+    const coincide = await bcrypt.compare(
+      dto.contrasena,
+      usuario.contrasena_hash,
+    );
 
     if (!coincide) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
+
+    const claims = {
+      sub: usuario.id_usuario,
+      email: usuario.correo_electronico,
+      rol: usuario.nombre_rol,
+    };
+
+    const accessToken = sign(
+      { ...claims, type: 'access' },
+      ACCESS_TTL,
+    );
+
+    const refreshToken = sign(
+      { ...claims, type: 'refresh' },
+      REFRESH_TTL,
+    );
 
     return {
       mensaje: 'Inicio de sesión exitoso',
@@ -81,12 +121,36 @@ export class AuthService {
         correo_electronico: usuario.correo_electronico,
         rol: usuario.nombre_rol,
       },
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async refresh(dto: RefreshDto) {
+    const payload = verify(dto.refreshToken);
+
+    if (!payload || payload.type !== 'refresh') {
+      throw new UnauthorizedException('Refresh token inválido o expirado');
+    }
+
+    const accessToken = sign(
+      {
+        sub: payload.sub,
+        email: payload.email,
+        rol: payload.rol,
+        type: 'access',
+      },
+      ACCESS_TTL,
+    );
+
+    return {
+      accessToken,
     };
   }
 
   async restablecerContrasena(dto: ResetPasswordDto) {
     const usuarios: any = await this.db.query(
-      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`
+      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`,
     );
 
     if (!Array.isArray(usuarios) || usuarios.length === 0) {
@@ -95,10 +159,10 @@ export class AuthService {
       );
     }
 
-    const nuevoHash = crypto.createHash('sha256').update(dto.nueva_contrasena).digest('hex');
+    const nuevoHash = await bcrypt.hash(dto.nueva_contrasena, 10);
 
     await this.db.query(
-      `UPDATE usuario SET contrasena_hash = '${nuevoHash}' WHERE correo_electronico = '${dto.correo_electronico}'`
+      `UPDATE usuario SET contrasena_hash = '${nuevoHash}' WHERE correo_electronico = '${dto.correo_electronico}'`,
     );
 
     return {

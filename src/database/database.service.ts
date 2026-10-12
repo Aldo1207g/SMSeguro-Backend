@@ -11,16 +11,29 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       host: 'localhost',
       port: 3306,
       user: 'root',
-      password: 'root', 
+      password: 'root',
       database: 'smseguro',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
     });
 
+    // Probar conexión inicial y crear la tabla de consejos si todavía no existe
     this.pool.getConnection()
-      .then((conn) => {
+      .then(async (conn) => {
         this.logger.log('Conexión exitosa a la base de datos MySQL (smseguro)');
+        // La tabla consejo guarda las guías que publican los analistas
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS consejo (
+            id_consejo INT AUTO_INCREMENT PRIMARY KEY,
+            id_analista INT NOT NULL,
+            titulo VARCHAR(150) NOT NULL,
+            contenido TEXT NOT NULL,
+            activo BOOLEAN DEFAULT TRUE,
+            fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_analista) REFERENCES usuario(id_usuario)
+          )
+        `);
         conn.release();
       })
       .catch((err) => {
@@ -28,6 +41,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       });
   }
 
+  // Hace una consulta a la base de datos y regresa los resultados.
   async query(sql: string, params: any[] = []) {
     const [results] = await this.pool.execute(sql, params);
     return results;
