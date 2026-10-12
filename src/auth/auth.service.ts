@@ -21,32 +21,33 @@ export class AuthService {
   constructor(private readonly db: DatabaseService) {}
 
   async registrar(dto: RegisterDto) {
-    // 1. Verificar si el correo ya existe
     const usuarioExistente = await this.db.query(
-      'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
-      [dto.correo_electronico],
+      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`,
     );
 
     if (Array.isArray(usuarioExistente) && usuarioExistente.length > 0) {
       throw new ConflictException('El correo electrónico ya está registrado');
     }
 
-    // 2. Hashear la contraseña con sal (10 rondas de salting)
-    const saltRounds = 10;
-    const contrasenaHash = await bcrypt.hash(dto.contrasena, saltRounds);
+    const contrasenaHash = await bcrypt.hash(dto.contrasena, 10);
 
-    // 3. Insertar usuario (id_rol_usuario 1 = 'Ciudadano')
     const sql = `
-      INSERT INTO usuario (nombre_usuario, correo_electronico, contrasena_hash, id_rol_usuario)
-      VALUES (?, ?, ?, 1)
+      INSERT INTO usuario (
+        nombre_usuario,
+        correo_electronico,
+        contrasena_hash,
+        id_rol_usuario
+      )
+      VALUES (
+        '${dto.nombre_usuario}',
+        '${dto.correo_electronico}',
+        '${contrasenaHash}',
+        1
+      )
     `;
 
     try {
-      const resultado: any = await this.db.query(sql, [
-        dto.nombre_usuario,
-        dto.correo_electronico,
-        contrasenaHash,
-      ]);
+      const resultado: any = await this.db.query(sql);
 
       return {
         mensaje: 'Usuario registrado exitosamente',
@@ -61,14 +62,21 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    // 1. Buscar al usuario y su rol
     const sql = `
-      SELECT u.id_usuario, u.nombre_usuario, u.correo_electronico, u.contrasena_hash, u.activo, r.nombre_rol
+      SELECT
+        u.id_usuario,
+        u.nombre_usuario,
+        u.correo_electronico,
+        u.contrasena_hash,
+        u.activo,
+        r.nombre_rol
       FROM usuario u
-      INNER JOIN cat_rol_usuario r ON u.id_rol_usuario = r.id_rol_usuario
-      WHERE u.correo_electronico = ?
+      INNER JOIN cat_rol_usuario r
+        ON u.id_rol_usuario = r.id_rol_usuario
+      WHERE u.correo_electronico = '${dto.correo_electronico}'
     `;
-    const usuarios: any = await this.db.query(sql, [dto.correo_electronico]);
+
+    const usuarios: any = await this.db.query(sql);
 
     if (!Array.isArray(usuarios) || usuarios.length === 0) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -80,13 +88,15 @@ export class AuthService {
       throw new UnauthorizedException('Tu cuenta se encuentra inactiva');
     }
 
-    // 2. Comparar la contraseña con el hash guardado
-    const coincide = await bcrypt.compare(dto.contrasena, usuario.contrasena_hash);
+    const coincide = await bcrypt.compare(
+      dto.contrasena,
+      usuario.contrasena_hash,
+    );
+
     if (!coincide) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // 3. Generar tokens JWT
     const claims = {
       sub: usuario.id_usuario,
       email: usuario.correo_electronico,
@@ -103,7 +113,6 @@ export class AuthService {
       REFRESH_TTL,
     );
 
-    // 4. Retornar sesión exitosa
     return {
       mensaje: 'Inicio de sesión exitoso',
       usuario: {
@@ -140,10 +149,8 @@ export class AuthService {
   }
 
   async restablecerContrasena(dto: ResetPasswordDto) {
-    // 1. Validar que el usuario exista
     const usuarios: any = await this.db.query(
-      'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
-      [dto.correo_electronico],
+      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`,
     );
 
     if (!Array.isArray(usuarios) || usuarios.length === 0) {
@@ -152,13 +159,10 @@ export class AuthService {
       );
     }
 
-    // 2. Generar el nuevo hash con sal de 10 rondas
     const nuevoHash = await bcrypt.hash(dto.nueva_contrasena, 10);
 
-    // 3. Actualizar la contraseña en la base de datos
     await this.db.query(
-      'UPDATE usuario SET contrasena_hash = ? WHERE correo_electronico = ?',
-      [nuevoHash, dto.correo_electronico],
+      `UPDATE usuario SET contrasena_hash = '${nuevoHash}' WHERE correo_electronico = '${dto.correo_electronico}'`,
     );
 
     return {

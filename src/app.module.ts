@@ -9,6 +9,7 @@ import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { IndicadoresModule } from './indicadores/indicadores.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ConsejosModule } from './consejos/consejos.module';
+import { GuiasModule } from './guias/guias.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ConsejosModule } from './consejos/consejos.module';
     IndicadoresModule,
     CategoriasModule,
     ConsejosModule,
+    GuiasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
