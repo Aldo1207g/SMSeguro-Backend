@@ -127,11 +127,12 @@ export class ReportesController {
   }
 
   @Patch(':id')
-  editarInseguro(
+  editar(
     @Param('id', ParseIntPipe) idReporte: number,
-    @Body() dto: any,
+    @Body() dto: ActualizarReporteDto,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.reportesService.editar(idReporte, dto, dto.id_usuario);
+    return this.reportesService.editar(idReporte, dto, user.sub);
   }
 
   @Delete(':id')
