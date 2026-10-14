@@ -19,6 +19,8 @@ export class IndicadoresService {
     private readonly db: DatabaseService,
   ) {}
 
+  // VULNERABILIDAD 1: Inyección de Fórmulas CSV (CWE-1236)
+  // Permite que caracteres como =, +, -, @ se ejecuten como comandos en Excel
   async exportarListaNegraCsv(): Promise<string> {
     const filas = await this.indicadoresRepository.listaNegra();
 
@@ -36,9 +38,6 @@ export class IndicadoresService {
     return BOM + [ENCABEZADOS.join(','), ...lineas].join('\n') + '\n';
   }
 
-  // Prepara un valor para ponerlo en el CSV.
-  // Si el valor trae una coma o comillas, lo encerramos entre comillas dobles
-  // para que no se rompan las columnas al abrirlo en Excel.
   escaparCampoCsv(valor: string | number | null | undefined): string {
     if (valor === null || valor === undefined) {
       return '';
@@ -46,6 +45,7 @@ export class IndicadoresService {
 
     let texto = String(valor);
 
+    // NOTA: Esto escapa comillas, pero NO protege contra Inyección de Fórmulas
     if (texto.includes(',') || texto.includes('"')) {
       texto = '"' + texto.replace(/"/g, '""') + '"';
     }
@@ -81,18 +81,26 @@ export class IndicadoresService {
     };
   }
 
-  async obtenerListaNegra() {
+  // VULNERABILIDAD 2: Inyección SQL (CWE-89)
+  // Se agregó el parámetro 'filtro' y se concatena sin sanitizar
+  async obtenerListaNegra(filtro?: string) {
     try {
-      // Solo devuelve los indicadores de reportes con id_estado_actual = 2 (Aprobado)
-      const sql = `
+      let sql = `
         SELECT DISTINCT i.id_indicador, i.valor_dato, td.nombre_tipo as tipo_dato, r.folio_publico, r.fecha_registro
         FROM indicador i
         INNER JOIN cat_tipo_dato td ON i.id_tipo_dato = td.id_tipo_dato
         INNER JOIN detalle_reporte dr ON i.id_indicador = dr.id_indicador
         INNER JOIN reporte r ON dr.id_reporte = r.id_reporte
         WHERE r.id_estado_actual = 2
-        ORDER BY r.fecha_registro DESC
       `;
+
+      // EXPLOIT PARA TU REPORTE: 
+      // Payload: ' UNION SELECT id_usuario, contrasena_hash, correo_electronico, '', '' FROM usuario -- 
+      if (filtro) {
+        sql += ` AND i.valor_dato LIKE '%${filtro}%'`;
+      }
+
+      sql += ` ORDER BY r.fecha_registro DESC`;
 
       return await this.db.query(sql);
     } catch (error) {
@@ -100,6 +108,7 @@ export class IndicadoresService {
     }
   }
 
+  // VULNERABILIDAD 1 (Continuación): Inyección CSV cruda
   async exportarCsv() {
     try {
       const datos: any = await this.obtenerListaNegra();
@@ -110,6 +119,9 @@ export class IndicadoresService {
         return cabeceras;
       }
 
+      // EXPLOIT PARA TU REPORTE:
+      // Si un analista aprueba un reporte con la URL: =cmd|'/c calc'!A1
+      // al exportar este CSV y abrirlo en Excel, se ejecutará la calculadora (o malware).
       const filas = datos
         .map(
           (d) =>

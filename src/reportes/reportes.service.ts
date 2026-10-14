@@ -13,6 +13,8 @@ import { ReportesRepository } from './reportes.repository';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
 import type { JwtPayload } from '../auth/jwt';
+import { DatabaseService } from '../database/database.service';
+import * as crypto from 'crypto';
 
 // Campos del archivo que nos interesan (los manda multer)
 export interface ArchivoSubido {
@@ -31,8 +33,7 @@ const ROLES_REVISORES = ['Analista', 'Administrador'];
 
 @Injectable()
 export class ReportesService {
-  constructor(private readonly reportesRepository: ReportesRepository) {}
-
+  constructor(private readonly reportesRepository: ReportesRepository, private readonly db: DatabaseService) {}
   prueba() {
     return {
       mensaje: 'Módulo de reportes funcionando',
@@ -186,12 +187,23 @@ export class ReportesService {
     }
 
     const folio = this.generarFolio();
-    const idReporte = await this.reportesRepository.crear(
-      idUsuario,
-      folio,
-      dto.descripcion,
-      dto.id_tipo_fraude,
-    );
+      // VULNERABILIDAD 3: Inyección SQL (CWE-89)
+       //Se ignora el repositorio y se concatena el texto directo.
+    const sqlReporte = `
+      INSERT INTO reporte (folio_publico, id_usuario, id_tipo_fraude, descripcion)
+      VALUES ('${folio}', ${idUsuario || 'NULL'}, ${dto.id_tipo_fraude || 'NULL'}, '${dto.descripcion}')
+    `;
+    // EXPLOIT PARA TU REPORTE: Si en el body mandas en "descripcion" el texto: 
+    // estafa'); DROP TABLE reporte; -- 
+    // Destruirás la tabla completa.
+    const resReporte: any = await this.db.query(sqlReporte);
+    const idReporte = resReporte.insertId;
+    // const idReporte = await this.reportesRepository.crear(
+    //   idUsuario,
+    //   folio,
+    //   dto.descripcion,
+    //   dto.id_tipo_fraude,
+    //);
 
     // Si el usuario puso una URL, se guarda como indicador "Enlace"
     if (url !== '') {

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { diskStorage } from 'multer';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -120,8 +121,19 @@ export class ReportesController {
   }
 
   // Sube una foto de evidencia para el reporte (campo 'foto' en form-data)
-  @Post(':id/captura')
-  @UseInterceptors(FileInterceptor('foto'))
+@Post(':id/captura')
+  @UseInterceptors(
+    FileInterceptor('foto', {
+      // VULNERABILIDAD 1 y 2: Unrestricted File Upload (sin límite de tamaño) y Path Traversal
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          // Un atacante puede subir "../../../script.php" y sobrescribir el servidor
+          cb(null, file.originalname);
+        },
+      }),
+    }),
+  )
   @ApiOperation({ summary: 'Subir foto de evidencia de un reporte' })
   subirCaptura(
     @Param('id', ParseIntPipe) idReporte: number,
