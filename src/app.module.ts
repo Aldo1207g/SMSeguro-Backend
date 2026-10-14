@@ -10,7 +10,6 @@ import { IndicadoresModule } from './indicadores/indicadores.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ConsejosModule } from './consejos/consejos.module';
 import { GuiasModule } from './guias/guias.module';
-import { EstadisticasModule } from './estadisticas/estadisticas.module'; // <-- Añade esta línea;
 
 @Module({
   imports: [
@@ -22,8 +21,8 @@ import { EstadisticasModule } from './estadisticas/estadisticas.module'; // <-- 
     IndicadoresModule,
     CategoriasModule,
     ConsejosModule,
-    GuiasModule,
-  , EstadisticasModule], // <-- Añádelo aquí
+    GuiasModule
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
