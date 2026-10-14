@@ -117,3 +117,13 @@ CREATE TABLE dictamen (
     FOREIGN KEY (id_resolucion) REFERENCES cat_resolucion(id_resolucion),
     CHECK (id_resolucion <> 2 OR motivo_rechazo IS NOT NULL)
 );
+-- 5. CONSEJOS / GUÍAS (los publica el analista/admin, los ve el ciudadano en la app)
+CREATE TABLE consejo (
+    id_consejo INT AUTO_INCREMENT PRIMARY KEY,
+    id_analista INT NOT NULL,
+    titulo VARCHAR(150) NOT NULL,
+    contenido TEXT NOT NULL,
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_analista) REFERENCES usuario(id_usuario)
+);
