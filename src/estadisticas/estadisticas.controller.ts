@@ -6,30 +6,13 @@ import { RolesGuard } from '../auth/roles.guard';
 
 @ApiTags('Estadísticas')
 @ApiBearerAuth()
-@Controller('estadisticas')
-// Solo Analista / Administrador (un ciudadano recibe 403)
+@Controller('reportes/estadisticas')
 @UseGuards(AuthGuard, RolesGuard)
 export class EstadisticasController {
   constructor(private readonly estadisticasService: EstadisticasService) {}
 
-  @Get('categorias')
-  @ApiOperation({ summary: 'Conteo de reportes por tipo de fraude' })
-  porCategoria() {
-    return this.estadisticasService.porCategoria();
-  }
-
-  @Get('estados')
-  @ApiOperation({ summary: 'Conteo de reportes por estado' })
-  porEstado() {
-    return this.estadisticasService.porEstado();
-  }
-}
-
-@Controller('reportes/estadisticas')
-export class EstadisticasController {
-  constructor(private readonly estadisticasService: EstadisticasService) {}
-
   @Get('dashboard')
+  @ApiOperation({ summary: 'Obtener métricas completas para el dashboard del analista' })
   async obtenerDashboard() {
     return await this.estadisticasService.obtenerMetricasDashboard();
   }
