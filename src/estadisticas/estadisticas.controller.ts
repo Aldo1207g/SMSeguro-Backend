@@ -24,3 +24,13 @@ export class EstadisticasController {
     return this.estadisticasService.porEstado();
   }
 }
+
+@Controller('reportes/estadisticas')
+export class EstadisticasController {
+  constructor(private readonly estadisticasService: EstadisticasService) {}
+
+  @Get('dashboard')
+  async obtenerDashboard() {
+    return await this.estadisticasService.obtenerMetricasDashboard();
+  }
+}

@@ -1,61 +1,46 @@
-import { Injectable } from '@nestjs/common';
-import { EstadisticasRepository } from './estadisticas.repository';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class EstadisticasService {
-  constructor(
-    private readonly estadisticasRepository: EstadisticasRepository,
-  ) {}
+  constructor(private readonly db: DatabaseService) {}
 
-  async porCategoria() {
-    const filas = await this.estadisticasRepository.contarPorCategoria();
+  async obtenerMetricasDashboard() {
+    try {
+      // 1. Total general de reportes activos
+      const queryTotal = `SELECT COUNT(id_reporte) AS total FROM reporte WHERE activo = 1;`;
 
-    // COUNT() de MySQL es BIGINT: se fuerza a number para que el JSON llegue listo para las gráficas.
-    const datos: {
-      id_tipo_fraude: number | null;
-      categoria: string;
-      total: number;
-    }[] = [];
-    let total = 0;
-    for (const fila of filas) {
-      // COUNT() de MySQL llega como texto/BIGINT, lo pasamos a numero
-      const cantidad = Number(fila.total);
-      total += cantidad;
-      datos.push({
-        id_tipo_fraude: fila.id_tipo_fraude,
-        categoria: fila.categoria,
-        total: cantidad,
-      });
+      // 2. Volumen de reportes agrupados por tipo de fraude (para gráfica de pastel)
+      const queryCategorias = `
+        SELECT ctf.id_tipo_fraude, ctf.nombre_tipo, COUNT(r.id_reporte) AS total
+        FROM cat_tipo_fraude ctf
+        LEFT JOIN reporte r ON ctf.id_tipo_fraude = r.id_tipo_fraude AND r.activo = 1
+        GROUP BY ctf.id_tipo_fraude, ctf.nombre_tipo;
+      `;
+
+      // 3. Volumen de reportes agrupados por estado de triaje (para gráfica de barras)
+      const queryEstados = `
+        SELECT cer.id_estado_reporte, cer.nombre_estado, COUNT(r.id_reporte) AS total
+        FROM cat_estado_reporte cer
+        LEFT JOIN reporte r ON cer.id_estado_reporte = r.id_estado_actual AND r.activo = 1
+        GROUP BY cer.id_estado_reporte, cer.nombre_estado;
+      `;
+
+      // Ejecución en paralelo para optimizar el tiempo de respuesta
+      const [totalResult, porCategoria, porEstado] = await Promise.all([
+        this.db.query(queryTotal),
+        this.db.query(queryCategorias),
+        this.db.query(queryEstados)
+      ]);
+
+      // Formateo estricto para coincidir con la interfaz 'Dashboard' en React (api.ts)
+      return {
+        total_reportes: (totalResult as any)[0]?.total || 0,
+        por_categoria: porCategoria,
+        por_estado: porEstado
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Error al obtener las estadísticas del dashboard');
     }
-
-    return {
-      total_reportes: total,
-      datos,
-    };
-  }
-
-  async porEstado() {
-    const filas = await this.estadisticasRepository.contarPorEstado();
-
-    const datos: {
-      id_estado_reporte: number;
-      estado: string;
-      total: number;
-    }[] = [];
-    let total = 0;
-    for (const fila of filas) {
-      const cantidad = Number(fila.total);
-      total += cantidad;
-      datos.push({
-        id_estado_reporte: fila.id_estado_reporte,
-        estado: fila.estado,
-        total: cantidad,
-      });
-    }
-
-    return {
-      total_reportes: total,
-      datos,
-    };
   }
 }
