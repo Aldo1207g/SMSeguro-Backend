@@ -1,10 +1,14 @@
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   UnauthorizedException,
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { DatabaseService } from '../database/database.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -13,8 +17,9 @@ import * as bcrypt from 'bcrypt';
 import { sign, verify } from './jwt';
 import { RefreshDto } from './dto/refresh.dto';
 
-const ACCESS_TTL = 15 * 60; // 15 minutos
-const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 días
+const ACCESS_TTL = 15 * 60;
+const REFRESH_TTL = 7 * 24 * 60 * 60;
+const TAM_MAXIMO_PERFIL = 5 * 1024 * 1024;
 
 @Injectable()
 export class AuthService {
@@ -22,7 +27,8 @@ export class AuthService {
 
   async registrar(dto: RegisterDto) {
     const usuarioExistente = await this.db.query(
-      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`,
+      'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
+      [dto.correo_electronico],
     );
 
     if (Array.isArray(usuarioExistente) && usuarioExistente.length > 0) {
@@ -38,16 +44,15 @@ export class AuthService {
         contrasena_hash,
         id_rol_usuario
       )
-      VALUES (
-        '${dto.nombre_usuario}',
-        '${dto.correo_electronico}',
-        '${contrasenaHash}',
-        1
-      )
+      VALUES (?, ?, ?, 1)
     `;
 
     try {
-      const resultado: any = await this.db.query(sql);
+      const resultado: any = await this.db.query(sql, [
+        dto.nombre_usuario,
+        dto.correo_electronico,
+        contrasenaHash,
+      ]);
 
       return {
         mensaje: 'Usuario registrado exitosamente',
@@ -56,7 +61,7 @@ export class AuthService {
         correo_electronico: dto.correo_electronico,
         rol: 'Ciudadano',
       };
-    } catch (error) {
+    } catch {
       throw new InternalServerErrorException('Error al registrar usuario');
     }
   }
@@ -73,10 +78,10 @@ export class AuthService {
       FROM usuario u
       INNER JOIN cat_rol_usuario r
         ON u.id_rol_usuario = r.id_rol_usuario
-      WHERE u.correo_electronico = '${dto.correo_electronico}'
+      WHERE u.correo_electronico = ?
     `;
 
-    const usuarios: any = await this.db.query(sql);
+    const usuarios: any = await this.db.query(sql, [dto.correo_electronico]);
 
     if (!Array.isArray(usuarios) || usuarios.length === 0) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -103,15 +108,8 @@ export class AuthService {
       rol: usuario.nombre_rol,
     };
 
-    const accessToken = sign(
-      { ...claims, type: 'access' },
-      ACCESS_TTL,
-    );
-
-    const refreshToken = sign(
-      { ...claims, type: 'refresh' },
-      REFRESH_TTL,
-    );
+    const accessToken = sign({ ...claims, type: 'access' }, ACCESS_TTL);
+    const refreshToken = sign({ ...claims, type: 'refresh' }, REFRESH_TTL);
 
     return {
       mensaje: 'Inicio de sesión exitoso',
@@ -150,7 +148,8 @@ export class AuthService {
 
   async restablecerContrasena(dto: ResetPasswordDto) {
     const usuarios: any = await this.db.query(
-      `SELECT id_usuario FROM usuario WHERE correo_electronico = '${dto.correo_electronico}'`,
+      'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
+      [dto.correo_electronico],
     );
 
     if (!Array.isArray(usuarios) || usuarios.length === 0) {
@@ -162,12 +161,67 @@ export class AuthService {
     const nuevoHash = await bcrypt.hash(dto.nueva_contrasena, 10);
 
     await this.db.query(
-      `UPDATE usuario SET contrasena_hash = '${nuevoHash}' WHERE correo_electronico = '${dto.correo_electronico}'`,
+      'UPDATE usuario SET contrasena_hash = ? WHERE correo_electronico = ?',
+      [nuevoHash, dto.correo_electronico],
     );
 
     return {
       mensaje:
         'Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva clave.',
     };
+  }
+
+  async subirFotoPerfil(idUsuario: number, archivo?: any) {
+    if (!archivo || !archivo.buffer) {
+      throw new BadRequestException('No se envió ninguna imagen');
+    }
+    if (!String(archivo.mimetype).startsWith('image/')) {
+      throw new BadRequestException('El archivo debe ser una imagen');
+    }
+    if (archivo.size > TAM_MAXIMO_PERFIL) {
+      throw new BadRequestException('La imagen no puede pesar más de 5 MB');
+    }
+
+    const carpeta = path.join('uploads', 'perfiles');
+    fs.mkdirSync(carpeta, { recursive: true });
+
+    const extension = archivo.mimetype === 'image/png' ? 'png' : 'jpg';
+    const hash = createHash('sha256')
+      .update(archivo.buffer)
+      .digest('hex')
+      .slice(0, 16);
+    const nombreArchivo = `perfil_${idUsuario}_${hash}.${extension}`;
+    const rutaArchivo = path.join(carpeta, nombreArchivo);
+
+    fs.writeFileSync(rutaArchivo, archivo.buffer);
+
+    await this.db.query(
+      'UPDATE usuario SET foto_perfil = ? WHERE id_usuario = ?',
+      [rutaArchivo, idUsuario],
+    );
+
+    return {
+      mensaje: 'Foto de perfil actualizada exitosamente',
+      ruta_archivo: rutaArchivo,
+    };
+  }
+
+  async obtenerFotoPerfil(idUsuario: number) {
+    const filas: any = await this.db.query(
+      'SELECT foto_perfil FROM usuario WHERE id_usuario = ?',
+      [idUsuario],
+    );
+
+    if (!Array.isArray(filas) || filas.length === 0 || !filas[0].foto_perfil) {
+      throw new NotFoundException('El usuario no tiene foto de perfil');
+    }
+
+    const rutaAbsoluta = path.resolve(filas[0].foto_perfil);
+    if (!fs.existsSync(rutaAbsoluta)) {
+      throw new NotFoundException('No se encontró el archivo de foto de perfil');
+    }
+
+    const mimeType = rutaAbsoluta.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    return { ruta: rutaAbsoluta, mimeType };
   }
 }
