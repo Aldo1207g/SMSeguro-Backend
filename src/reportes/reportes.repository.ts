@@ -25,6 +25,7 @@ export interface ReporteListaRow extends RowDataPacket {
   fecha_creacion: string;
   id_estado_actual: number;
   nombre_estado: string;
+    reportado_por: string;
 }
 
 export interface ReportePendienteRow extends RowDataPacket {
@@ -49,6 +50,7 @@ export interface ReporteDetalleRow extends RowDataPacket {
   motivo_rechazo: string | null;
   telefono: string | null;
   fecha_registro: string;
+  reportado_por: string;
 }
 
 export interface CapturaRow extends RowDataPacket {
@@ -83,6 +85,7 @@ export class ReportesRepository {
   async buscarDetalle(idReporte: number): Promise<ReporteDetalleRow | null> {
     const sql = `
       SELECT r.id_reporte, r.folio_publico, r.id_usuario, r.descripcion,
+        u.nombre_usuario AS reportado_por,
              (SELECT i.valor_dato
                 FROM detalle_reporte dr
                 INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
@@ -101,6 +104,7 @@ export class ReportesRepository {
                LIMIT 1) AS motivo_rechazo,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d %H:%i:%s') AS fecha_registro
       FROM reporte r
+      INNER JOIN usuario u ON u.id_usuario = r.id_usuario
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
       INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
       WHERE r.id_reporte = ? AND r.activo = TRUE
@@ -355,8 +359,10 @@ export class ReportesRepository {
                       LIMIT 1), '') AS telefono,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
              r.id_estado_actual,
-             e.nombre_estado
+             e.nombre_estado,
+             u.nombre_usuario AS reportado_por
       FROM reporte r
+      INNER JOIN usuario u ON u.id_usuario = r.id_usuario
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
       INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
       WHERE r.id_usuario = ? AND r.activo = TRUE

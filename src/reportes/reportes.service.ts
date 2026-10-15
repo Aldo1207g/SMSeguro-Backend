@@ -91,6 +91,7 @@ export class ReportesService {
       fecha_creacion: fila.fecha_creacion,
       id_estado_actual: fila.id_estado_actual,
       nombre_estado: fila.nombre_estado,
+      reportado_por: fila.reportado_por,
     }));
   }
 
