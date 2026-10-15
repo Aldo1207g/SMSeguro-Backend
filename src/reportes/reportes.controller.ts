@@ -8,20 +8,21 @@ import {
   Patch,
   Post,
   Res,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { diskStorage } from 'multer';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiForbiddenResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { ReportesService } from './reportes.service';
+import { ReportesService, TAM_MAXIMO } from './reportes.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -81,7 +82,9 @@ export class ReportesController {
   // Bandeja del analista: reportes pendientes (solo Analista / Admin)
   @Get('pendientes')
   @UseGuards(RolesGuard)
-  @ApiOperation({ summary: 'Reportes pendientes de dictaminar (Analista/Admin)' })
+  @ApiOperation({
+    summary: 'Reportes pendientes de dictaminar (Analista/Admin)',
+  })
   reportesPendientes() {
     return this.reportesService.reportesPendientes();
   }
@@ -112,38 +115,38 @@ export class ReportesController {
     @CurrentUser() user: JwtPayload,
     @Res() res: Response,
   ) {
-    const captura = await this.reportesService.obtenerCaptura(
-      idReporte,
-      user,
-    );
+    const captura = await this.reportesService.obtenerCaptura(idReporte, user);
     res.setHeader('Content-Type', captura.mimeType);
     res.sendFile(captura.ruta);
   }
 
-  // Sube una foto de evidencia para el reporte (campo 'foto' en form-data)
-@Post(':id/captura')
+  // Sube la foto de evidencia del reporte (multipart/form-data).
+  // La app de iOS la manda en el campo 'file' y otros clientes en 'captura',
+  // por eso se acepta cualquier nombre y se toma el primer (y único) archivo.
+  // Se queda en memoria: el servicio calcula el hash y la guarda en ./uploads
+  @Post(':id/captura')
   @UseInterceptors(
-    FileInterceptor('foto', {
-      // VULNERABILIDAD 1 y 2: Unrestricted File Upload (sin límite de tamaño) y Path Traversal
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          // Un atacante puede subir "../../../script.php" y sobrescribir el servidor
-          cb(null, file.originalname);
-        },
-      }),
+    AnyFilesInterceptor({
+      limits: { fileSize: TAM_MAXIMO, files: 1 },
     }),
   )
   @ApiOperation({ summary: 'Subir foto de evidencia de un reporte' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
   subirCaptura(
     @Param('id', ParseIntPipe) idReporte: number,
     @CurrentUser() user: JwtPayload,
-    @UploadedFile() foto: ArchivoSubido,
+    @UploadedFiles() archivos: ArchivoSubido[],
   ) {
     return this.reportesService.subirCaptura(
       idReporte,
       user.sub,
-      foto,
+      archivos?.[0],
     );
   }
 
