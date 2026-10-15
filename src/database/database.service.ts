@@ -62,12 +62,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
             id_comentario INT AUTO_INCREMENT PRIMARY KEY,
             id_reporte INT NOT NULL,
             id_usuario INT NOT NULL,
-            contenido VARCHAR(500) NOT NULL,
+            contenido VARCHAR(1000) NOT NULL,
             activo BOOLEAN DEFAULT TRUE,
             fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (id_reporte) REFERENCES reporte(id_reporte),
             FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
           )
+        `);
+
+        // Homologa el límite con el DTO de comentarios.
+        await conn.query(`
+          ALTER TABLE comentario_reporte
+          MODIFY COLUMN contenido VARCHAR(1000) NOT NULL
         `);
 
         conn.release();
