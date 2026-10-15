@@ -13,8 +13,6 @@ import { ReportesRepository } from './reportes.repository';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
 import type { JwtPayload } from '../auth/jwt';
-import { DatabaseService } from '../database/database.service';
-import * as crypto from 'crypto';
 
 // Campos del archivo que nos interesan (los manda multer)
 export interface ArchivoSubido {
@@ -24,7 +22,7 @@ export interface ArchivoSubido {
   buffer: Buffer;
 }
 
-const TAM_MAXIMO = 5 * 1024 * 1024; // 5 MB (igual que el CHECK de la tabla)
+export const TAM_MAXIMO = 5 * 1024 * 1024; // 5 MB (igual que el CHECK de la tabla)
 
 // cat_estado_reporte: 1 = Pendiente
 const ESTADO_PENDIENTE = 1;
@@ -33,7 +31,8 @@ const ROLES_REVISORES = ['Analista', 'Administrador'];
 
 @Injectable()
 export class ReportesService {
-  constructor(private readonly reportesRepository: ReportesRepository, private readonly db: DatabaseService) {}
+  constructor(private readonly reportesRepository: ReportesRepository) {}
+
   prueba() {
     return {
       mensaje: 'Módulo de reportes funcionando',
@@ -187,23 +186,12 @@ export class ReportesService {
     }
 
     const folio = this.generarFolio();
-      // VULNERABILIDAD 3: Inyección SQL (CWE-89)
-       //Se ignora el repositorio y se concatena el texto directo.
-    const sqlReporte = `
-      INSERT INTO reporte (folio_publico, id_usuario, id_tipo_fraude, descripcion)
-      VALUES ('${folio}', ${idUsuario || 'NULL'}, ${dto.id_tipo_fraude || 'NULL'}, '${dto.descripcion}')
-    `;
-    // EXPLOIT PARA TU REPORTE: Si en el body mandas en "descripcion" el texto: 
-    // estafa'); DROP TABLE reporte; -- 
-    // Destruirás la tabla completa.
-    const resReporte: any = await this.db.query(sqlReporte);
-    const idReporte = resReporte.insertId;
-    // const idReporte = await this.reportesRepository.crear(
-    //   idUsuario,
-    //   folio,
-    //   dto.descripcion,
-    //   dto.id_tipo_fraude,
-    //);
+    const idReporte = await this.reportesRepository.crear(
+      idUsuario,
+      folio,
+      dto.descripcion,
+      dto.id_tipo_fraude,
+    );
 
     // Si el usuario puso una URL, se guarda como indicador "Enlace"
     if (url !== '') {
@@ -232,62 +220,86 @@ export class ReportesService {
     return 'SMS-' + codigo;
   }
 
-  // POST /reportes/:id/captura -> guarda una foto de evidencia del reporte
+  // POST /reportes/:id/captura -> guarda (o reemplaza) la foto de evidencia del reporte
   async subirCaptura(
     idReporte: number,
     idUsuario: number,
     archivo?: ArchivoSubido,
   ) {
+    // 1. Que el reporte exista, sea del usuario y siga Pendiente
     await this.obtenerReporteEditable(idReporte, idUsuario);
-    // 1. Que venga un archivo
+
+    // 2. Que venga un archivo
     if (!archivo) {
       throw new BadRequestException('No se envió ninguna imagen');
     }
 
-    // 2. Que sea una imagen y no pese más de 5 MB
+    // 3. Que sea una imagen y pese entre 1 byte y 5 MB (CHECK de la tabla)
     if (!archivo.mimetype.startsWith('image/')) {
       throw new BadRequestException('El archivo debe ser una imagen');
+    }
+    if (archivo.size === 0) {
+      throw new BadRequestException('La imagen está vacía');
     }
     if (archivo.size > TAM_MAXIMO) {
       throw new BadRequestException('La imagen no puede pesar más de 5 MB');
     }
 
-    // 3. Que el reporte exista (obtenerReporte lanza 404 si no)
-    await this.obtenerReporte(idReporte);
-
     // 4. Calcular el hash (huella única) del archivo
     const hash = createHash('sha256').update(archivo.buffer).digest('hex');
 
-    // 5. Guardar el archivo en la carpeta uploads/
-    const carpeta = 'uploads';
+    // 5. Guardar el archivo en ./uploads con el hash como nombre (nunca el
+    // nombre original, así no se puede salir de la carpeta con "../")
+    const carpeta = './uploads';
     fs.mkdirSync(carpeta, { recursive: true });
     const extension = archivo.mimetype === 'image/png' ? 'png' : 'jpg';
     const nombreArchivo = `${hash}.${extension}`;
     const rutaArchivo = path.join(carpeta, nombreArchivo);
     fs.writeFileSync(rutaArchivo, archivo.buffer);
 
-    // 6. Registrar la captura en la base de datos
+    // 6. Registrar la captura: si el reporte ya tenía una, se reemplaza
+    const anterior = await this.reportesRepository.buscarCaptura(idReporte);
+    let idCaptura: number;
     try {
-      const idCaptura = await this.reportesRepository.crearCaptura(
-        idReporte,
-        rutaArchivo,
-        archivo.size,
-        archivo.mimetype,
-        hash,
-      );
-
-      return {
-        mensaje: 'Evidencia subida exitosamente',
-        id_captura: idCaptura,
-        ruta_archivo: rutaArchivo,
-      };
+      if (anterior) {
+        await this.reportesRepository.reemplazarCaptura(
+          anterior.id_captura,
+          rutaArchivo,
+          archivo.size,
+          archivo.mimetype,
+          hash,
+        );
+        idCaptura = anterior.id_captura;
+      } else {
+        idCaptura = await this.reportesRepository.crearCaptura(
+          idReporte,
+          rutaArchivo,
+          archivo.size,
+          archivo.mimetype,
+          hash,
+        );
+      }
     } catch (error) {
-      // El hash es UNIQUE: si ya existe esa misma imagen, avisamos
+      // El hash es UNIQUE: si esa misma imagen ya está en otro reporte, avisamos
       if ((error as { code?: string })?.code === 'ER_DUP_ENTRY') {
         throw new ConflictException('Esta imagen ya fue subida antes');
       }
       throw new InternalServerErrorException('Error al guardar la evidencia');
     }
+
+    // La foto anterior ya no la usa ningún reporte: se borra para no dejar basura
+    if (
+      anterior &&
+      path.resolve(anterior.ruta_archivo) !== path.resolve(rutaArchivo)
+    ) {
+      fs.rm(anterior.ruta_archivo, { force: true }, () => {});
+    }
+
+    return {
+      mensaje: 'Evidencia subida exitosamente',
+      id_captura: idCaptura,
+      ruta_archivo: rutaArchivo,
+    };
   }
 
   // Devuelve la ruta y el tipo de la foto de evidencia para poder mostrarla

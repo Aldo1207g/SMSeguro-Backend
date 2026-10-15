@@ -52,6 +52,7 @@ export interface ReporteDetalleRow extends RowDataPacket {
 }
 
 export interface CapturaRow extends RowDataPacket {
+  id_captura: number;
   ruta_archivo: string;
   mime_type: string;
 }
@@ -220,9 +221,6 @@ export class ReportesRepository {
     );
   }
 
-  // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
-  // CROSS JOIN arma todas las combinaciones de los dos catálogos (9 × 3 = 27) y el
-  // LEFT JOIN cuenta los reportes de cada una; así las combinaciones vacías salen en 0.
   // Guarda los datos de una foto de evidencia en la tabla captura
   async crearCaptura(
     idReporte: number,
@@ -247,10 +245,33 @@ export class ReportesRepository {
     return resultado.insertId;
   }
 
+  // Cuando el reporte ya tenía foto, se sobreescribe esa misma fila con la nueva
+  async reemplazarCaptura(
+    idCaptura: number,
+    rutaArchivo: string,
+    tamanoBytes: number,
+    mimeType: string,
+    hashArchivo: string,
+  ): Promise<void> {
+    const sql = `
+      UPDATE captura
+         SET ruta_archivo = ?, tamano_bytes = ?, mime_type = ?, hash_archivo = ?
+       WHERE id_captura = ?
+    `;
+
+    await this.db.query(sql, [
+      rutaArchivo,
+      tamanoBytes,
+      mimeType,
+      hashArchivo,
+      idCaptura,
+    ]);
+  }
+
   // Trae la foto de evidencia mas reciente de un reporte (o null si no tiene)
   async buscarCaptura(idReporte: number): Promise<CapturaRow | null> {
     const sql = `
-      SELECT ruta_archivo, mime_type
+      SELECT id_captura, ruta_archivo, mime_type
       FROM captura
       WHERE id_reporte = ?
       ORDER BY id_captura DESC
@@ -349,6 +370,9 @@ export class ReportesRepository {
     ])) as ReporteListaRow[];
   }
 
+  // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
+  // CROSS JOIN arma todas las combinaciones de los dos catálogos (9 × 3 = 27) y el
+  // LEFT JOIN cuenta los reportes de cada una; así las combinaciones vacías salen en 0.
   async conteoPorCategoriaYEstado(): Promise<ConteoCategoriaEstadoRow[]> {
     const sql = `
       SELECT t.id_tipo_fraude, t.nombre_tipo,
