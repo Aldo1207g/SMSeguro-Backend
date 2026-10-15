@@ -29,6 +29,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtPayload } from '../auth/jwt';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
+import { CrearComentarioDto } from './dto/crear-comentario.dto';
 import type { ArchivoSubido } from './reportes.service';
 
 @ApiTags('Reportes')
@@ -105,6 +106,48 @@ export class ReportesController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.reportesService.verDetalle(idReporte, user);
+  }
+
+    // Resumen de comunidad: autor y contador de "Mismo caso".
+  @Get(':id/comunidad')
+  @ApiOperation({ summary: 'Consultar el resumen de comunidad de un reporte' })
+  verComunidad(
+    @Param('id', ParseIntPipe) idReporte: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.reportesService.verComunidad(idReporte, user);
+  }
+
+  // Cada usuario puede marcar el mismo reporte una sola vez.
+  // La identidad del usuario sale del token.
+  @Post(':id/mismo-caso')
+  @ApiOperation({ summary: 'Indicar que me pasó el mismo caso' })
+  marcarMismoCaso(
+    @Param('id', ParseIntPipe) idReporte: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.reportesService.marcarMismoCaso(idReporte, user);
+  }
+
+  // Consulta los comentarios visibles del reporte.
+  @Get(':id/comentarios')
+  @ApiOperation({ summary: 'Consultar los comentarios de un reporte' })
+  comentarios(
+    @Param('id', ParseIntPipe) idReporte: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.reportesService.comentarios(idReporte, user);
+  }
+
+  // El DTO recibe únicamente el contenido; el autor sale del token.
+  @Post(':id/comentarios')
+  @ApiOperation({ summary: 'Publicar un comentario en un reporte' })
+  comentar(
+    @Param('id', ParseIntPipe) idReporte: number,
+    @Body() dto: CrearComentarioDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.reportesService.comentar(idReporte, dto, user);
   }
 
   // Devuelve la foto de evidencia del reporte como imagen
