@@ -21,7 +21,7 @@ import { GuiasModule } from './guias/guias.module';
     IndicadoresModule,
     CategoriasModule,
     ConsejosModule,
-    GuiasModule
+    GuiasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
