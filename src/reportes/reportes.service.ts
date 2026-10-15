@@ -44,10 +44,16 @@ export class ReportesService {
   }
 
   async misEstadisticas(idUsuario: number) {
-    const total = await this.reportesRepository.contarPorUsuario(idUsuario);
+    const [totalUsuario, datosDashboard] = await Promise.all([
+      this.reportesRepository.contarPorUsuario(idUsuario),
+      this.dashboard(),
+    ]);
 
     return {
-      total_reportes: total,
+      total_reportes: totalUsuario,
+      total_global: datosDashboard.total_reportes,
+      por_categoria: datosDashboard.por_categoria,
+      por_estado: datosDashboard.por_estado,
     };
   }
 
