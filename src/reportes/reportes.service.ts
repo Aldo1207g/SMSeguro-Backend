@@ -80,7 +80,7 @@ export class ReportesService {
   }
 
   // GET /reportes/mis-reportes -> lista de reportes del usuario logueado
-  async misReportes(idUsuario: number) {
+    async misReportes(idUsuario: number) {
     const filas = await this.reportesRepository.listarPorUsuario(idUsuario);
 
     return filas.map((fila) => ({
@@ -93,6 +93,7 @@ export class ReportesService {
       id_estado_actual: fila.id_estado_actual,
       nombre_estado: fila.nombre_estado,
       reportado_por: fila.reportado_por,
+      mismo_caso_total: Number(fila.mismo_caso_total),
     }));
   }
 

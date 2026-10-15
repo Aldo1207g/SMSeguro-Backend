@@ -25,7 +25,8 @@ export interface ReporteListaRow extends RowDataPacket {
   fecha_creacion: string;
   id_estado_actual: number;
   nombre_estado: string;
-    reportado_por: string;
+  reportado_por: string;
+  mismo_caso_total: number;
 }
 
 export interface ReportePendienteRow extends RowDataPacket {
@@ -36,6 +37,7 @@ export interface ReportePendienteRow extends RowDataPacket {
   fecha_creacion: string;
   reportado_por: string;
 }
+
 
 export interface ReporteDetalleRow extends RowDataPacket {
   id_reporte: number;
@@ -51,6 +53,7 @@ export interface ReporteDetalleRow extends RowDataPacket {
   telefono: string | null;
   fecha_registro: string;
   reportado_por: string;
+  mismo_caso_total: number;
 }
 
 export interface CapturaRow extends RowDataPacket {
@@ -94,6 +97,9 @@ export class ReportesRepository {
     const sql = `
       SELECT r.id_reporte, r.folio_publico, r.id_usuario, r.descripcion,
         u.nombre_usuario AS reportado_por,
+        (SELECT COUNT(*)
+              FROM reporte_mismo_caso mc
+               WHERE mc.id_reporte = r.id_reporte) AS mismo_caso_total,
              (SELECT i.valor_dato
                 FROM detalle_reporte dr
                 INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
@@ -124,7 +130,12 @@ export class ReportesRepository {
       idReporte,
     ])) as ReporteDetalleRow[];
 
-    return filas.length > 0 ? filas[0] : null;
+    return filas.length > 0
+      ? {
+          ...filas[0],
+          mismo_caso_total: Number(filas[0].mismo_caso_total),
+        }
+      : null;
   }
 
   // Inserta el reporte (estado 1 = Pendiente por DEFAULT) y regresa su id
@@ -368,7 +379,10 @@ export class ReportesRepository {
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
              r.id_estado_actual,
              e.nombre_estado,
-             u.nombre_usuario AS reportado_por
+             u.nombre_usuario AS reportado_por,
+             (SELECT COUNT(*)
+                FROM reporte_mismo_caso mc
+                WHERE mc.id_reporte = r.id_reporte) AS mismo_caso_total
       FROM reporte r
       INNER JOIN usuario u ON u.id_usuario = r.id_usuario
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
@@ -377,11 +391,16 @@ export class ReportesRepository {
       ORDER BY r.fecha_registro DESC
     `;
 
-    return (await this.db.query(sql, [
+    const filas = (await this.db.query(sql, [
       ROL_INDICADOR_ENLACE,
       ROL_INDICADOR_REMITENTE,
       idUsuario,
     ])) as ReporteListaRow[];
+
+    return filas.map((fila) => ({
+      ...fila,
+      mismo_caso_total: Number(fila.mismo_caso_total),
+    }));
   }
 
   // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
