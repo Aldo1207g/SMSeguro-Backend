@@ -1,5 +1,8 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import * as mysql from 'mysql2/promise';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -8,21 +11,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     this.pool = mysql.createPool({
-      host: 'localhost',
-      port: 3306,
-      user: 'root',
-      password: 'root',
-      database: 'smseguro',
+      host: process.env.DB_HOST ?? 'localhost',
+      port: Number(process.env.DB_PORT ?? 3306),
+      user: process.env.DB_USER ?? 'root',
+      password: process.env.DB_PASSWORD ?? 'root',
+      database: process.env.DB_NAME ?? 'smseguro',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
     });
 
-    // Probar conexión inicial y crear la tabla de consejos si todavía no existe
-    this.pool.getConnection()
+    this.pool
+      .getConnection()
       .then(async (conn) => {
         this.logger.log('Conexión exitosa a la base de datos MySQL (smseguro)');
-        // La tabla consejo guarda las guías que publican los analistas
+
         await conn.query(`
           CREATE TABLE IF NOT EXISTS consejo (
             id_consejo INT AUTO_INCREMENT PRIMARY KEY,
@@ -34,6 +37,39 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
             FOREIGN KEY (id_analista) REFERENCES usuario(id_usuario)
           )
         `);
+
+        try {
+          await conn.query(
+            'ALTER TABLE usuario ADD COLUMN foto_perfil VARCHAR(255) NULL',
+          );
+        } catch {
+          // La columna foto_perfil ya existe
+        }
+
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS reporte_mismo_caso (
+            id_reporte INT NOT NULL,
+            id_usuario INT NOT NULL,
+            fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id_reporte, id_usuario),
+            FOREIGN KEY (id_reporte) REFERENCES reporte(id_reporte),
+            FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+          )
+        `);
+
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS comentario_reporte (
+            id_comentario INT AUTO_INCREMENT PRIMARY KEY,
+            id_reporte INT NOT NULL,
+            id_usuario INT NOT NULL,
+            contenido VARCHAR(500) NOT NULL,
+            activo BOOLEAN DEFAULT TRUE,
+            fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_reporte) REFERENCES reporte(id_reporte),
+            FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+          )
+        `);
+
         conn.release();
       })
       .catch((err) => {
@@ -41,7 +77,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       });
   }
 
-  // Hace una consulta a la base de datos y regresa los resultados.
   async query(sql: string, params: any[] = []) {
     const [results] = await this.pool.execute(sql, params);
     return results;
