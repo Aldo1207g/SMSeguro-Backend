@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import type { RowDataPacket } from 'mysql2/promise';
 import { IndicadoresRepository } from './indicadores.repository';
 import { DatabaseService } from '../database/database.service';
 
@@ -10,7 +11,22 @@ const ENCABEZADOS = [
 ];
 
 // BOM UTF-8: hace que Excel muestre bien acentos y la "ñ"
-const BOM = '\uFEFF';
+const BOM = '﻿';
+
+// Si una celda empieza con alguno de estos caracteres, Excel/LibreOffice la
+// toman como fórmula (Inyección de Fórmulas CSV, CWE-1236)
+const INICIOS_PELIGROSOS = ['=', '+', '-', '@', '\t', '\r'];
+
+// cat_estado_reporte: 2 = Aprobado
+const ESTADO_APROBADO = 2;
+
+export interface IndicadorAprobadoRow extends RowDataPacket {
+  id_indicador: number;
+  valor_dato: string;
+  tipo_dato: string;
+  folio_publico: string;
+  fecha_registro: Date | string | null;
+}
 
 @Injectable()
 export class IndicadoresService {
@@ -19,8 +35,7 @@ export class IndicadoresService {
     private readonly db: DatabaseService,
   ) {}
 
-  // VULNERABILIDAD 1: Inyección de Fórmulas CSV (CWE-1236)
-  // Permite que caracteres como =, +, -, @ se ejecuten como comandos en Excel
+  // CSV de la lista negra (Analista/Admin). Cada celda pasa por escaparCampoCsv
   async exportarListaNegraCsv(): Promise<string> {
     const filas = await this.indicadoresRepository.listaNegra();
 
@@ -38,6 +53,7 @@ export class IndicadoresService {
     return BOM + [ENCABEZADOS.join(','), ...lineas].join('\n') + '\n';
   }
 
+  // Prepara un valor para una celda del CSV sin que Excel lo ejecute
   escaparCampoCsv(valor: string | number | null | undefined): string {
     if (valor === null || valor === undefined) {
       return '';
@@ -45,8 +61,15 @@ export class IndicadoresService {
 
     let texto = String(valor);
 
-    // NOTA: Esto escapa comillas, pero NO protege contra Inyección de Fórmulas
-    if (texto.includes(',') || texto.includes('"')) {
+    // 1. Neutralizar fórmulas: con la comilla simple al inicio Excel lo trata
+    // como texto, ej. =HYPERLINK(...) -> '=HYPERLINK(...)
+    if (INICIOS_PELIGROSOS.some((caracter) => texto.startsWith(caracter))) {
+      texto = "'" + texto;
+    }
+
+    // 2. Comas, saltos de línea o comillas: el campo va entre comillas y las
+    // comillas internas se duplican
+    if (/[",\r\n]/.test(texto)) {
       texto = '"' + texto.replace(/"/g, '""') + '"';
     }
 
@@ -81,56 +104,54 @@ export class IndicadoresService {
     };
   }
 
-  // VULNERABILIDAD 2: Inyección SQL (CWE-89)
-  // Se agregó el parámetro 'filtro' y se concatena sin sanitizar
-  async obtenerListaNegra(filtro?: string) {
+  // Indicadores de reportes aprobados. Consulta fija: el estado va como
+  // parámetro (?) y no se arma el SQL con datos externos (CWE-89)
+  async obtenerListaNegra(): Promise<IndicadorAprobadoRow[]> {
+    const sql = `
+      SELECT DISTINCT i.id_indicador, i.valor_dato, td.nombre_tipo AS tipo_dato,
+             r.folio_publico, r.fecha_registro
+      FROM indicador i
+      INNER JOIN cat_tipo_dato td   ON i.id_tipo_dato = td.id_tipo_dato
+      INNER JOIN detalle_reporte dr ON i.id_indicador = dr.id_indicador
+      INNER JOIN reporte r          ON dr.id_reporte = r.id_reporte
+      WHERE r.id_estado_actual = ?
+      ORDER BY r.fecha_registro DESC
+    `;
+
     try {
-      let sql = `
-        SELECT DISTINCT i.id_indicador, i.valor_dato, td.nombre_tipo as tipo_dato, r.folio_publico, r.fecha_registro
-        FROM indicador i
-        INNER JOIN cat_tipo_dato td ON i.id_tipo_dato = td.id_tipo_dato
-        INNER JOIN detalle_reporte dr ON i.id_indicador = dr.id_indicador
-        INNER JOIN reporte r ON dr.id_reporte = r.id_reporte
-        WHERE r.id_estado_actual = 2
-      `;
-
-      // EXPLOIT PARA TU REPORTE: 
-      // Payload: ' UNION SELECT id_usuario, contrasena_hash, correo_electronico, '', '' FROM usuario -- 
-      if (filtro) {
-        sql += ` AND i.valor_dato LIKE '%${filtro}%'`;
-      }
-
-      sql += ` ORDER BY r.fecha_registro DESC`;
-
-      return await this.db.query(sql);
-    } catch (error) {
+      return (await this.db.query(sql, [
+        ESTADO_APROBADO,
+      ])) as IndicadorAprobadoRow[];
+    } catch {
       throw new InternalServerErrorException('Error al obtener la lista negra');
     }
   }
 
-  // VULNERABILIDAD 1 (Continuación): Inyección CSV cruda
-  async exportarCsv() {
+  // CSV de /indicadores/exportar. Cada celda pasa por escaparCampoCsv para
+  // que una URL como =cmd|'/c calc'!A1 no se ejecute al abrirlo en Excel
+  async exportarCsv(): Promise<string> {
+    const cabeceras =
+      'id_indicador,valor_dato,tipo_dato,folio_publico,fecha_registro\n';
+
     try {
-      const datos: any = await this.obtenerListaNegra();
-      const cabeceras =
-        'id_indicador,valor_dato,tipo_dato,folio_publico,fecha_registro\n';
+      const datos = await this.obtenerListaNegra();
 
-      if (!Array.isArray(datos) || datos.length === 0) {
-        return cabeceras;
-      }
+      const filas = datos.map((d) =>
+        [
+          d.id_indicador,
+          d.valor_dato,
+          d.tipo_dato,
+          d.folio_publico,
+          d.fecha_registro instanceof Date
+            ? d.fecha_registro.toISOString()
+            : d.fecha_registro,
+        ]
+          .map((valor) => this.escaparCampoCsv(valor))
+          .join(','),
+      );
 
-      // EXPLOIT PARA TU REPORTE:
-      // Si un analista aprueba un reporte con la URL: =cmd|'/c calc'!A1
-      // al exportar este CSV y abrirlo en Excel, se ejecutará la calculadora (o malware).
-      const filas = datos
-        .map(
-          (d) =>
-            `${d.id_indicador},"${d.valor_dato}","${d.tipo_dato}","${d.folio_publico}","${d.fecha_registro}"`,
-        )
-        .join('\n');
-
-      return cabeceras + filas;
-    } catch (error) {
+      return cabeceras + filas.join('\n');
+    } catch {
       throw new InternalServerErrorException('Error al generar el archivo CSV');
     }
   }
