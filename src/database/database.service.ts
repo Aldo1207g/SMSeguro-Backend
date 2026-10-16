@@ -138,9 +138,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return filas as T[];
   }
 
-  // Crea (si no existe) un usuario demo. La contraseña NO está en el código:
-  // se lee de la variable SEED_DEMO_PASSWORD del .env y se hashea aquí con
-  // bcrypt, igual que en el registro. Regresa el id del usuario.
+  // Crea un usuario demo si no existe. La contraseña no va en el código:
+  // la leemos de SEED_DEMO_PASSWORD (.env) y la hasheamos con bcrypt, igual
+  // que en el registro. Devuelve el id del usuario.
   private async asegurarUsuarioDemo(
     conn: mysql.PoolConnection,
     nombre: string,

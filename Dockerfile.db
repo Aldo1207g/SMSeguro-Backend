@@ -1,0 +1,3 @@
+# Imagen de MySQL con el esquema de SMSeguro ya incluido
+FROM mysql:8.0
+COPY docker/db-init/ /docker-entrypoint-initdb.d/

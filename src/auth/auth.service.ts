@@ -154,9 +154,9 @@ export class AuthService {
     };
   }
 
-  // Paso 1: genera un código de 6 dígitos y lo guarda hasheado.
-  // Siempre responde lo mismo (exista o no el correo) para no revelar
-  // qué correos tienen cuenta (enumeración de usuarios).
+  // Paso 1: hacemos un código de 6 dígitos y lo guardamos hasheado.
+  // Siempre contestamos lo mismo aunque el correo no exista, así nadie
+  // puede adivinar qué correos ya están registrados.
   async solicitarRecuperacion(dto: ForgotPasswordDto) {
     const usuarios = (await this.db.query(
       'SELECT id_usuario FROM usuario WHERE correo_electronico = ? AND activo = TRUE LIMIT 1',
@@ -191,7 +191,7 @@ export class AuthService {
     return { mensaje: MENSAJE_RECUPERACION };
   }
 
-  // Paso 2: valida el código (vigente, no usado, máx. 5 intentos) y cambia la contraseña
+  // Paso 2: revisamos el código (que siga vigente, sin usar y con máx. 5 intentos) y cambiamos la contraseña
   async restablecerContrasena(dto: ResetPasswordDto) {
     const errorCodigo = new BadRequestException(
       'El código es incorrecto o ya venció. Solicita uno nuevo.',
