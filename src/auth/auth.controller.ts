@@ -14,7 +14,7 @@ import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
@@ -40,7 +40,16 @@ export class AuthController {
     return this.authService.refresh(dto);
   }
 
+  // Recuperar contraseña, paso 1: pedir el código de 6 dígitos
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Solicitar código para restablecer contraseña' })
+  solicitarRecuperacion(@Body() dto: ForgotPasswordDto) {
+    return this.authService.solicitarRecuperacion(dto);
+  }
+
+  // Paso 2: mandar el código + la nueva contraseña
   @Post('reset-password')
+  @ApiOperation({ summary: 'Restablecer contraseña con el código recibido' })
   restablecerContrasena(@Body() dto: ResetPasswordDto) {
     return this.authService.restablecerContrasena(dto);
   }
@@ -50,10 +59,7 @@ export class AuthController {
   @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('foto'))
   @ApiOperation({ summary: 'Subir o actualizar foto de perfil del usuario' })
-  subirFotoPerfil(
-    @CurrentUser() user: JwtPayload,
-    @UploadedFile() foto: any,
-  ) {
+  subirFotoPerfil(@CurrentUser() user: JwtPayload, @UploadedFile() foto: any) {
     return this.authService.subirFotoPerfil(user.sub, foto);
   }
 

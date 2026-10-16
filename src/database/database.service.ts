@@ -90,6 +90,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
+    // Códigos para recuperar contraseña (se guardan hasheados y vencen)
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS recuperacion_contrasena (
+        id_recuperacion INT AUTO_INCREMENT PRIMARY KEY,
+        id_usuario INT NOT NULL,
+        codigo_hash VARCHAR(255) NOT NULL,
+        expira DATETIME NOT NULL,
+        intentos INT NOT NULL DEFAULT 0,
+        usado BOOLEAN NOT NULL DEFAULT FALSE,
+        fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_recuperacion_usuario (id_usuario, usado),
+        FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+      )
+    `);
+
     // Bandeja de avisos para el usuario (cambios de estado de sus reportes)
     await conn.query(`
       CREATE TABLE IF NOT EXISTS notificacion (

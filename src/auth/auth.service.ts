@@ -5,14 +5,15 @@ import {
   UnauthorizedException,
   NotFoundException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DatabaseService } from '../database/database.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/reset-password.dto';
 import * as bcrypt from 'bcrypt';
 import { sign, verify } from './jwt';
 import { RefreshDto } from './dto/refresh.dto';
@@ -20,9 +21,16 @@ import { RefreshDto } from './dto/refresh.dto';
 const ACCESS_TTL = 15 * 60;
 const REFRESH_TTL = 7 * 24 * 60 * 60;
 const TAM_MAXIMO_PERFIL = 5 * 1024 * 1024;
+// Recuperación de contraseña: el código dura 15 min y permite 5 intentos
+const MINUTOS_CODIGO = 15;
+const MAX_INTENTOS_CODIGO = 5;
+const MENSAJE_RECUPERACION =
+  'Si el correo está registrado, te enviamos un código de 6 dígitos para restablecer tu contraseña.';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(private readonly db: DatabaseService) {}
 
   async registrar(dto: RegisterDto) {
@@ -146,23 +154,88 @@ export class AuthService {
     };
   }
 
-  async restablecerContrasena(dto: ResetPasswordDto) {
-    const usuarios: any = await this.db.query(
-      'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
+  // Paso 1: genera un código de 6 dígitos y lo guarda hasheado.
+  // Siempre responde lo mismo (exista o no el correo) para no revelar
+  // qué correos tienen cuenta (enumeración de usuarios).
+  async solicitarRecuperacion(dto: ForgotPasswordDto) {
+    const usuarios = (await this.db.query(
+      'SELECT id_usuario FROM usuario WHERE correo_electronico = ? AND activo = TRUE LIMIT 1',
       [dto.correo_electronico],
+    )) as { id_usuario: number }[];
+
+    if (usuarios.length > 0) {
+      const idUsuario = usuarios[0].id_usuario;
+      const codigo = randomInt(100000, 1000000).toString();
+      const codigoHash = await bcrypt.hash(codigo, 10);
+
+      // Invalida códigos anteriores y guarda el nuevo
+      await this.db.query(
+        'UPDATE recuperacion_contrasena SET usado = TRUE WHERE id_usuario = ? AND usado = FALSE',
+        [idUsuario],
+      );
+      await this.db.query(
+        `INSERT INTO recuperacion_contrasena (id_usuario, codigo_hash, expira)
+         VALUES (?, ?, NOW() + INTERVAL ${MINUTOS_CODIGO} MINUTE)`,
+        [idUsuario, codigoHash],
+      );
+
+      // Aún no hay servicio de correo: en desarrollo el código se ve en la
+      // terminal del backend. En producción aquí se enviaría por email.
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(
+          `[DEV] Código de recuperación para ${dto.correo_electronico}: ${codigo}`,
+        );
+      }
+    }
+
+    return { mensaje: MENSAJE_RECUPERACION };
+  }
+
+  // Paso 2: valida el código (vigente, no usado, máx. 5 intentos) y cambia la contraseña
+  async restablecerContrasena(dto: ResetPasswordDto) {
+    const errorCodigo = new BadRequestException(
+      'El código es incorrecto o ya venció. Solicita uno nuevo.',
     );
 
-    if (!Array.isArray(usuarios) || usuarios.length === 0) {
-      throw new NotFoundException(
-        'No existe una cuenta registrada con ese correo electrónico',
+    const filas = (await this.db.query(
+      `SELECT rc.id_recuperacion, rc.id_usuario, rc.codigo_hash, rc.intentos
+         FROM recuperacion_contrasena rc
+         INNER JOIN usuario u ON u.id_usuario = rc.id_usuario
+        WHERE u.correo_electronico = ?
+          AND rc.usado = FALSE
+          AND rc.expira > NOW()
+        ORDER BY rc.id_recuperacion DESC
+        LIMIT 1`,
+      [dto.correo_electronico],
+    )) as {
+      id_recuperacion: number;
+      id_usuario: number;
+      codigo_hash: string;
+      intentos: number;
+    }[];
+
+    if (filas.length === 0 || filas[0].intentos >= MAX_INTENTOS_CODIGO) {
+      throw errorCodigo;
+    }
+    const registro = filas[0];
+
+    const coincide = await bcrypt.compare(dto.codigo, registro.codigo_hash);
+    if (!coincide) {
+      await this.db.query(
+        'UPDATE recuperacion_contrasena SET intentos = intentos + 1 WHERE id_recuperacion = ?',
+        [registro.id_recuperacion],
       );
+      throw errorCodigo;
     }
 
     const nuevoHash = await bcrypt.hash(dto.nueva_contrasena, 10);
-
     await this.db.query(
-      'UPDATE usuario SET contrasena_hash = ? WHERE correo_electronico = ?',
-      [nuevoHash, dto.correo_electronico],
+      'UPDATE usuario SET contrasena_hash = ? WHERE id_usuario = ?',
+      [nuevoHash, registro.id_usuario],
+    );
+    await this.db.query(
+      'UPDATE recuperacion_contrasena SET usado = TRUE WHERE id_recuperacion = ?',
+      [registro.id_recuperacion],
     );
 
     return {
@@ -218,7 +291,9 @@ export class AuthService {
 
     const rutaAbsoluta = path.resolve(filas[0].foto_perfil);
     if (!fs.existsSync(rutaAbsoluta)) {
-      throw new NotFoundException('No se encontró el archivo de foto de perfil');
+      throw new NotFoundException(
+        'No se encontró el archivo de foto de perfil',
+      );
     }
 
     const mimeType = rutaAbsoluta.endsWith('.png') ? 'image/png' : 'image/jpeg';
