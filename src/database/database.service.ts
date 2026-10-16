@@ -90,6 +90,22 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
+    // Bandeja de avisos para el usuario (cambios de estado de sus reportes)
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS notificacion (
+        id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
+        id_usuario INT NOT NULL,
+        id_reporte INT NULL,
+        titulo VARCHAR(120) NOT NULL,
+        mensaje VARCHAR(500) NOT NULL,
+        leida BOOLEAN NOT NULL DEFAULT FALSE,
+        fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_notificacion_usuario (id_usuario, leida),
+        FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
+        FOREIGN KEY (id_reporte) REFERENCES reporte(id_reporte)
+      )
+    `);
+
     // Homologa el límite con el DTO de comentarios.
     await conn.query(`
       ALTER TABLE comentario_reporte
@@ -337,6 +353,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           [idVecina, idCiudadano, idVecina],
         );
       }
+
+      // Avisos de ejemplo para el ciudadano demo (uno por reporte dictaminado)
+      await conn.query(
+        `INSERT INTO notificacion (id_usuario, id_reporte, titulo, mensaje)
+         SELECT r.id_usuario, r.id_reporte,
+                IF(r.id_estado_actual = 2, 'Tu reporte fue aprobado', 'Tu reporte fue rechazado'),
+                IF(r.id_estado_actual = 2,
+                   CONCAT('Un analista confirmó tu reporte #', r.id_reporte, ' como fraude. ¡Gracias por ayudar a la comunidad!'),
+                   CONCAT('Tu reporte #', r.id_reporte, ' fue rechazado. Motivo: ', IFNULL(d.motivo_rechazo, 'sin motivo')))
+           FROM reporte r
+           LEFT JOIN dictamen d ON d.id_reporte = r.id_reporte
+          WHERE r.folio_publico LIKE 'SMS-SEED%'
+            AND r.id_estado_actual IN (2, 3)
+            AND NOT EXISTS (SELECT 1 FROM notificacion n WHERE n.id_reporte = r.id_reporte)`,
+      );
 
       const consejosExistentes = await this.consultar<{ total: number }>(
         conn,
