@@ -25,6 +25,8 @@ export interface ReporteListaRow extends RowDataPacket {
   fecha_creacion: string;
   id_estado_actual: number;
   nombre_estado: string;
+  reportado_por: string;
+  mismo_caso_total: number;
 }
 
 export interface ReportePendienteRow extends RowDataPacket {
@@ -35,6 +37,7 @@ export interface ReportePendienteRow extends RowDataPacket {
   fecha_creacion: string;
   reportado_por: string;
 }
+
 
 export interface ReporteDetalleRow extends RowDataPacket {
   id_reporte: number;
@@ -49,12 +52,22 @@ export interface ReporteDetalleRow extends RowDataPacket {
   motivo_rechazo: string | null;
   telefono: string | null;
   fecha_registro: string;
+  reportado_por: string;
+  mismo_caso_total: number;
 }
 
 export interface CapturaRow extends RowDataPacket {
   id_captura: number;
   ruta_archivo: string;
   mime_type: string;
+}
+
+export interface ComentarioReporteRow extends RowDataPacket {
+  id_comentario: number;
+  id_reporte: number;
+  autor: string;
+  contenido: string;
+  fecha_creacion: string;
 }
 
 @Injectable()
@@ -83,6 +96,10 @@ export class ReportesRepository {
   async buscarDetalle(idReporte: number): Promise<ReporteDetalleRow | null> {
     const sql = `
       SELECT r.id_reporte, r.folio_publico, r.id_usuario, r.descripcion,
+        u.nombre_usuario AS reportado_por,
+        (SELECT COUNT(*)
+              FROM reporte_mismo_caso mc
+               WHERE mc.id_reporte = r.id_reporte) AS mismo_caso_total,
              (SELECT i.valor_dato
                 FROM detalle_reporte dr
                 INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
@@ -101,6 +118,7 @@ export class ReportesRepository {
                LIMIT 1) AS motivo_rechazo,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d %H:%i:%s') AS fecha_registro
       FROM reporte r
+      INNER JOIN usuario u ON u.id_usuario = r.id_usuario
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
       INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
       WHERE r.id_reporte = ? AND r.activo = TRUE
@@ -112,7 +130,12 @@ export class ReportesRepository {
       idReporte,
     ])) as ReporteDetalleRow[];
 
-    return filas.length > 0 ? filas[0] : null;
+    return filas.length > 0
+      ? {
+          ...filas[0],
+          mismo_caso_total: Number(filas[0].mismo_caso_total),
+        }
+      : null;
   }
 
   // Inserta el reporte (estado 1 = Pendiente por DEFAULT) y regresa su id
@@ -355,19 +378,29 @@ export class ReportesRepository {
                       LIMIT 1), '') AS telefono,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
              r.id_estado_actual,
-             e.nombre_estado
+             e.nombre_estado,
+             u.nombre_usuario AS reportado_por,
+             (SELECT COUNT(*)
+                FROM reporte_mismo_caso mc
+                WHERE mc.id_reporte = r.id_reporte) AS mismo_caso_total
       FROM reporte r
+      INNER JOIN usuario u ON u.id_usuario = r.id_usuario
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
       INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
       WHERE r.id_usuario = ? AND r.activo = TRUE
       ORDER BY r.fecha_registro DESC
     `;
 
-    return (await this.db.query(sql, [
+    const filas = (await this.db.query(sql, [
       ROL_INDICADOR_ENLACE,
       ROL_INDICADOR_REMITENTE,
       idUsuario,
     ])) as ReporteListaRow[];
+
+    return filas.map((fila) => ({
+      ...fila,
+      mismo_caso_total: Number(fila.mismo_caso_total),
+    }));
   }
 
   // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
@@ -389,5 +422,90 @@ export class ReportesRepository {
     `;
 
     return (await this.db.query(sql)) as ConteoCategoriaEstadoRow[];
+  }
+
+  // Registra un voto. La clave primaria impide duplicarlo,
+  // incluso si llegan dos peticiones al mismo tiempo.
+  async registrarMismoCaso(
+    idReporte: number,
+    idUsuario: number,
+  ): Promise<boolean> {
+    try {
+      await this.db.query(
+        `INSERT INTO reporte_mismo_caso (id_reporte, id_usuario)
+         VALUES (?, ?)`,
+        [idReporte, idUsuario],
+      );
+
+      return true;
+    } catch (error) {
+      // Repetir el voto no aumenta el contador ni genera otro registro.
+      if ((error as { code?: string }).code === 'ER_DUP_ENTRY') {
+        return false;
+      }
+
+      throw error;
+    }
+  }
+
+  // Devuelve el total y si el usuario actual ya marcó este reporte.
+  async resumenMismoCaso(idReporte: number, idUsuario: number) {
+    const filas = (await this.db.query(
+      `SELECT COUNT(*) AS total,
+              COALESCE(MAX(id_usuario = ?), 0) AS marcado
+         FROM reporte_mismo_caso
+        WHERE id_reporte = ?`,
+      [idUsuario, idReporte],
+    )) as (RowDataPacket & {
+      total: number | string;
+      marcado: number | string;
+    })[];
+
+    return {
+      mismo_caso_total: Number(filas[0].total),
+      mismo_caso_usuario: Number(filas[0].marcado) === 1,
+    };
+  }
+
+    // Guarda el comentario con el usuario identificado por el servidor.
+  async crearComentario(
+    idReporte: number,
+    idUsuario: number,
+    contenido: string,
+  ): Promise<number> {
+    const resultado = (await this.db.query(
+      `INSERT INTO comentario_reporte
+         (id_reporte, id_usuario, contenido)
+       VALUES (?, ?, ?)`,
+      [idReporte, idUsuario, contenido],
+    )) as ResultSetHeader;
+
+    return resultado.insertId;
+  }
+
+  // Consulta los últimos 100 comentarios activos.
+  // Devuelve el nombre del autor, sin exponer su correo.
+  async listarComentarios(
+    idReporte: number,
+  ): Promise<ComentarioReporteRow[]> {
+    const filas = (await this.db.query(
+      `SELECT c.id_comentario,
+              c.id_reporte,
+              u.nombre_usuario AS autor,
+              c.contenido,
+              DATE_FORMAT(
+                c.fecha_creacion,
+                '%Y-%m-%d %H:%i:%s'
+              ) AS fecha_creacion
+         FROM comentario_reporte c
+         INNER JOIN usuario u ON u.id_usuario = c.id_usuario
+        WHERE c.id_reporte = ? AND c.activo = TRUE
+        ORDER BY c.id_comentario DESC
+        LIMIT 100`,
+      [idReporte],
+    )) as ComentarioReporteRow[];
+
+    // Dentro de ese grupo, mostramos primero el más antiguo.
+    return filas.reverse();
   }
 }
