@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { ReportesRepository } from './reportes.repository';
 import { ActualizarReporteDto } from './dto/actualizar-reporte.dto';
 import { CrearReporteDto } from './dto/crear-reporte.dto';
+import { CrearComentarioDto } from './dto/crear-comentario.dto';
 import type { JwtPayload } from '../auth/jwt';
 
 // Campos del archivo que nos interesan (los manda multer)
@@ -85,7 +86,7 @@ export class ReportesService {
   }
 
   // GET /reportes/mis-reportes -> lista de reportes del usuario logueado
-  async misReportes(idUsuario: number) {
+    async misReportes(idUsuario: number) {
     const filas = await this.reportesRepository.listarPorUsuario(idUsuario);
 
     return filas.map((fila) => ({
@@ -97,6 +98,8 @@ export class ReportesService {
       fecha_creacion: fila.fecha_creacion,
       id_estado_actual: fila.id_estado_actual,
       nombre_estado: fila.nombre_estado,
+      reportado_por: fila.reportado_por,
+      mismo_caso_total: Number(fila.mismo_caso_total),
     }));
   }
 
@@ -419,5 +422,111 @@ export class ReportesService {
     }
 
     return reporte;
+  }
+
+    // Acceso a comunidad: reportes aprobados, propios o accesibles
+  // para Analista / Administrador. No cambia el acceso a evidencia.
+  private async obtenerReporteParaComunidad(
+    idReporte: number,
+    user: JwtPayload,
+  ) {
+    const reporte = await this.obtenerReporte(idReporte);
+
+    const esAutor = reporte.id_usuario === user.sub;
+    const esRevisor = ROLES_REVISORES.includes(user.rol);
+    const esAprobado = reporte.id_estado_actual === 2;
+
+    if (!esAutor && !esRevisor && !esAprobado) {
+      throw new ForbiddenException(
+        'No tienes permiso para consultar la comunidad de este reporte',
+      );
+    }
+
+    return reporte;
+  }
+
+  // Resumen limitado para comunidad: no devuelve la captura,
+  // el correo, el teléfono ni la descripción privada del reporte.
+  async verComunidad(idReporte: number, user: JwtPayload) {
+    const reporte = await this.obtenerReporteParaComunidad(
+      idReporte,
+      user,
+    );
+
+    const resumen = await this.reportesRepository.resumenMismoCaso(
+      idReporte,
+      user.sub,
+    );
+
+    return {
+      id_reporte: reporte.id_reporte,
+      folio_publico: reporte.folio_publico,
+      titulo: reporte.nombre_tipo ?? 'Sin categoría',
+      reportado_por: reporte.reportado_por,
+      nombre_estado: reporte.nombre_estado,
+      ...resumen,
+    };
+  }
+
+  // El usuario siempre sale del JWT, nunca del body.
+  async marcarMismoCaso(idReporte: number, user: JwtPayload) {
+    await this.obtenerReporteParaComunidad(idReporte, user);
+
+    const registrado = await this.reportesRepository.registrarMismoCaso(
+      idReporte,
+      user.sub,
+    );
+
+    const resumen = await this.reportesRepository.resumenMismoCaso(
+      idReporte,
+      user.sub,
+    );
+
+    return {
+      mensaje: registrado
+        ? 'Se registró que te pasó el mismo caso'
+        : 'Ya habías marcado este reporte',
+      id_reporte: idReporte,
+      ...resumen,
+    };
+  }
+
+  async comentarios(idReporte: number, user: JwtPayload) {
+    await this.obtenerReporteParaComunidad(idReporte, user);
+
+    return this.reportesRepository.listarComentarios(idReporte);
+  }
+
+  async comentar(
+    idReporte: number,
+    dto: CrearComentarioDto,
+    user: JwtPayload,
+  ) {
+    await this.obtenerReporteParaComunidad(idReporte, user);
+
+    // También comprobamos el contenido si otro servicio llama este método.
+    if (typeof dto.contenido !== 'string') {
+      throw new BadRequestException('El comentario debe ser texto');
+    }
+
+    const contenido = dto.contenido.trim();
+
+    if (contenido.length === 0 || contenido.length > 1000) {
+      throw new BadRequestException(
+        'El comentario debe contener entre 1 y 1000 caracteres',
+      );
+    }
+
+    const idComentario = await this.reportesRepository.crearComentario(
+      idReporte,
+      user.sub,
+      contenido,
+    );
+
+    return {
+      mensaje: 'Comentario publicado exitosamente',
+      id_comentario: idComentario,
+      id_reporte: idReporte,
+    };
   }
 }
