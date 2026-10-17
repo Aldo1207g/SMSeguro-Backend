@@ -41,6 +41,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @ApiOperation({ summary: 'Restablecer contraseña con el código recibido' })
   restablecerContrasena(@Body() dto: ResetPasswordDto) {
     return this.authService.restablecerContrasena(dto);
   }
