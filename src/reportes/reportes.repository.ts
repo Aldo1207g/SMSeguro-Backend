@@ -8,9 +8,6 @@ const ROL_INDICADOR_ENLACE = 2;
 const TIPO_DATO_TELEFONO = 1;
 const ROL_INDICADOR_REMITENTE = 1;
 
-// Días que un reporte permanece visible en el muro de comunidad
-export const DIAS_EN_COMUNIDAD = 14;
-
 export interface ConteoCategoriaEstadoRow extends RowDataPacket {
   id_tipo_fraude: number;
   nombre_tipo: string;
@@ -41,6 +38,7 @@ export interface ReportePendienteRow extends RowDataPacket {
   reportado_por: string;
 }
 
+
 export interface ReporteDetalleRow extends RowDataPacket {
   id_reporte: number;
   folio_publico: string;
@@ -56,12 +54,6 @@ export interface ReporteDetalleRow extends RowDataPacket {
   fecha_registro: string;
   reportado_por: string;
   mismo_caso_total: number;
-  en_comunidad: number;
-}
-
-// Reporte del muro de comunidad (reportes de todos los usuarios)
-export interface ReporteComunidadRow extends ReporteListaRow {
-  es_mio: number;
 }
 
 export interface CapturaRow extends RowDataPacket {
@@ -124,8 +116,7 @@ export class ReportesRepository {
                 FROM dictamen d
                WHERE d.id_reporte = r.id_reporte
                LIMIT 1) AS motivo_rechazo,
-             DATE_FORMAT(r.fecha_registro, '%Y-%m-%d %H:%i:%s') AS fecha_registro,
-             (r.fecha_registro >= NOW() - INTERVAL ${DIAS_EN_COMUNIDAD} DAY) AS en_comunidad
+             DATE_FORMAT(r.fecha_registro, '%Y-%m-%d %H:%i:%s') AS fecha_registro
       FROM reporte r
       INNER JOIN usuario u ON u.id_usuario = r.id_usuario
       LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
@@ -412,51 +403,6 @@ export class ReportesRepository {
     }));
   }
 
-  // Muro de comunidad: reportes de TODOS los usuarios (pendientes, aprobados y
-  // rechazados) de los últimos DIAS_EN_COMUNIDAD días, para que la lista no
-  // crezca infinitamente. es_mio indica si el usuario actual es el autor.
-  async listarComunidad(idUsuario: number): Promise<ReporteComunidadRow[]> {
-    const sql = `
-      SELECT r.id_reporte,
-             IFNULL(t.nombre_tipo, 'Sin categoria') AS titulo,
-             r.descripcion,
-             IFNULL((SELECT i.valor_dato
-                       FROM detalle_reporte dr
-                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
-                      WHERE dr.id_reporte = r.id_reporte
-                        AND dr.id_rol_indicador = ?
-                      LIMIT 1), '') AS url,
-             IFNULL((SELECT i.valor_dato
-                       FROM detalle_reporte dr
-                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
-                      WHERE dr.id_reporte = r.id_reporte
-                        AND dr.id_rol_indicador = ?
-                      LIMIT 1), '') AS telefono,
-             DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
-             r.id_estado_actual,
-             e.nombre_estado,
-             u.nombre_usuario AS reportado_por,
-             (SELECT COUNT(*)
-                FROM reporte_mismo_caso mc
-               WHERE mc.id_reporte = r.id_reporte) AS mismo_caso_total,
-             (r.id_usuario = ?) AS es_mio
-      FROM reporte r
-      INNER JOIN usuario u ON u.id_usuario = r.id_usuario
-      LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
-      INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
-      WHERE r.activo = TRUE
-        AND r.fecha_registro >= NOW() - INTERVAL ${DIAS_EN_COMUNIDAD} DAY
-      ORDER BY r.fecha_registro DESC
-      LIMIT 200
-    `;
-
-    return (await this.db.query(sql, [
-      ROL_INDICADOR_ENLACE,
-      ROL_INDICADOR_REMITENTE,
-      idUsuario,
-    ])) as ReporteComunidadRow[];
-  }
-
   // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.
   // CROSS JOIN arma todas las combinaciones de los dos catálogos (9 × 3 = 27) y el
   // LEFT JOIN cuenta los reportes de cada una; así las combinaciones vacías salen en 0.
@@ -521,7 +467,7 @@ export class ReportesRepository {
     };
   }
 
-  // Guarda el comentario con el usuario identificado por el servidor.
+    // Guarda el comentario con el usuario identificado por el servidor.
   async crearComentario(
     idReporte: number,
     idUsuario: number,
@@ -539,7 +485,9 @@ export class ReportesRepository {
 
   // Consulta los últimos 100 comentarios activos.
   // Devuelve el nombre del autor, sin exponer su correo.
-  async listarComentarios(idReporte: number): Promise<ComentarioReporteRow[]> {
+  async listarComentarios(
+    idReporte: number,
+  ): Promise<ComentarioReporteRow[]> {
     const filas = (await this.db.query(
       `SELECT c.id_comentario,
               c.id_reporte,

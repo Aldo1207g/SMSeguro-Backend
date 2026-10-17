@@ -85,27 +85,8 @@ export class ReportesService {
     }));
   }
 
-  // GET /reportes/comunidad -> reportes de todos los usuarios (últimas 2 semanas)
-  async comunidadGlobal(idUsuario: number) {
-    const filas = await this.reportesRepository.listarComunidad(idUsuario);
-
-    return filas.map((fila) => ({
-      id_reporte: fila.id_reporte,
-      titulo: fila.titulo,
-      descripcion: fila.descripcion,
-      url: fila.url,
-      telefono: fila.telefono,
-      fecha_creacion: fila.fecha_creacion,
-      id_estado_actual: fila.id_estado_actual,
-      nombre_estado: fila.nombre_estado,
-      reportado_por: fila.reportado_por,
-      mismo_caso_total: Number(fila.mismo_caso_total),
-      es_mio: Number(fila.es_mio) === 1,
-    }));
-  }
-
   // GET /reportes/mis-reportes -> lista de reportes del usuario logueado
-  async misReportes(idUsuario: number) {
+    async misReportes(idUsuario: number) {
     const filas = await this.reportesRepository.listarPorUsuario(idUsuario);
 
     return filas.map((fila) => ({
@@ -443,7 +424,7 @@ export class ReportesService {
     return reporte;
   }
 
-  // Acceso a comunidad: reportes aprobados, propios o accesibles
+    // Acceso a comunidad: reportes aprobados, propios o accesibles
   // para Analista / Administrador. No cambia el acceso a evidencia.
   private async obtenerReporteParaComunidad(
     idReporte: number,
@@ -454,11 +435,8 @@ export class ReportesService {
     const esAutor = reporte.id_usuario === user.sub;
     const esRevisor = ROLES_REVISORES.includes(user.rol);
     const esAprobado = reporte.id_estado_actual === 2;
-    // Todo reporte de las últimas 2 semanas aparece en el muro de comunidad,
-    // así que cualquiera puede ver sus comentarios y dar "+1".
-    const enComunidad = Number(reporte.en_comunidad) === 1;
 
-    if (!esAutor && !esRevisor && !esAprobado && !enComunidad) {
+    if (!esAutor && !esRevisor && !esAprobado) {
       throw new ForbiddenException(
         'No tienes permiso para consultar la comunidad de este reporte',
       );
@@ -470,7 +448,10 @@ export class ReportesService {
   // Resumen limitado para comunidad: no devuelve la captura,
   // el correo, el teléfono ni la descripción privada del reporte.
   async verComunidad(idReporte: number, user: JwtPayload) {
-    const reporte = await this.obtenerReporteParaComunidad(idReporte, user);
+    const reporte = await this.obtenerReporteParaComunidad(
+      idReporte,
+      user,
+    );
 
     const resumen = await this.reportesRepository.resumenMismoCaso(
       idReporte,
@@ -516,7 +497,11 @@ export class ReportesService {
     return this.reportesRepository.listarComentarios(idReporte);
   }
 
-  async comentar(idReporte: number, dto: CrearComentarioDto, user: JwtPayload) {
+  async comentar(
+    idReporte: number,
+    dto: CrearComentarioDto,
+    user: JwtPayload,
+  ) {
     await this.obtenerReporteParaComunidad(idReporte, user);
 
     // También comprobamos el contenido si otro servicio llama este método.

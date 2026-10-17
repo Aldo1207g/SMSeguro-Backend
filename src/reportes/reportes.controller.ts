@@ -80,16 +80,6 @@ export class ReportesController {
     return this.reportesService.misReportes(user.sub);
   }
 
-  // Muro de comunidad: reportes de todos (pendientes, aprobados y rechazados)
-  // de las últimas 2 semanas. Va antes de las rutas con :id.
-  @Get('comunidad')
-  @ApiOperation({
-    summary: 'Reportes de todos los usuarios de las últimas 2 semanas',
-  })
-  comunidadGlobal(@CurrentUser() user: JwtPayload) {
-    return this.reportesService.comunidadGlobal(user.sub);
-  }
-
   // Bandeja del analista: reportes pendientes (solo Analista / Admin)
   @Get('pendientes')
   @UseGuards(RolesGuard)
@@ -118,7 +108,7 @@ export class ReportesController {
     return this.reportesService.verDetalle(idReporte, user);
   }
 
-  // Resumen de comunidad: autor y contador de "Mismo caso".
+    // Resumen de comunidad: autor y contador de "Mismo caso".
   @Get(':id/comunidad')
   @ApiOperation({ summary: 'Consultar el resumen de comunidad de un reporte' })
   verComunidad(

@@ -7,7 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { createHash, randomInt } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DatabaseService } from '../database/database.service';
@@ -21,11 +21,6 @@ import { RefreshDto } from './dto/refresh.dto';
 const ACCESS_TTL = 15 * 60;
 const REFRESH_TTL = 7 * 24 * 60 * 60;
 const TAM_MAXIMO_PERFIL = 5 * 1024 * 1024;
-// Recuperación de contraseña: el código dura 15 min y permite 5 intentos
-const MINUTOS_CODIGO = 15;
-const MAX_INTENTOS_CODIGO = 5;
-const MENSAJE_RECUPERACION =
-  'Si el correo está registrado, te enviamos un código de 6 dígitos para restablecer tu contraseña.';
 
 @Injectable()
 export class AuthService {
@@ -154,12 +149,9 @@ export class AuthService {
     };
   }
 
-  // Paso 1: hacemos un código de 6 dígitos y lo guardamos hasheado.
-  // Siempre contestamos lo mismo aunque el correo no exista, así nadie
-  // puede adivinar qué correos ya están registrados.
-  async solicitarRecuperacion(dto: ForgotPasswordDto) {
-    const usuarios = (await this.db.query(
-      'SELECT id_usuario FROM usuario WHERE correo_electronico = ? AND activo = TRUE LIMIT 1',
+  async restablecerContrasena(dto: ResetPasswordDto) {
+    const usuarios: any = await this.db.query(
+      'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
       [dto.correo_electronico],
     )) as { id_usuario: number }[];
 
@@ -229,6 +221,7 @@ export class AuthService {
     }
 
     const nuevoHash = await bcrypt.hash(dto.nueva_contrasena, 10);
+
     await this.db.query(
       'UPDATE usuario SET contrasena_hash = ? WHERE id_usuario = ?',
       [nuevoHash, registro.id_usuario],
@@ -291,9 +284,7 @@ export class AuthService {
 
     const rutaAbsoluta = path.resolve(filas[0].foto_perfil);
     if (!fs.existsSync(rutaAbsoluta)) {
-      throw new NotFoundException(
-        'No se encontró el archivo de foto de perfil',
-      );
+      throw new NotFoundException('No se encontró el archivo de foto de perfil');
     }
 
     const mimeType = rutaAbsoluta.endsWith('.png') ? 'image/png' : 'image/jpeg';

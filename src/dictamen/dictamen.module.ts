@@ -3,10 +3,9 @@ import { DictamenController } from './dictamen.controller';
 import { DictamenService } from './dictamen.service';
 import { DictamenRepository } from './dictamen.repository';
 import { AuthModule } from '../auth/auth.module';
-import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 
 @Module({
-  imports: [AuthModule, NotificacionesModule],
+  imports: [AuthModule],
   controllers: [DictamenController],
   providers: [DictamenService, DictamenRepository],
 })

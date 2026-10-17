@@ -10,7 +10,6 @@ import { IndicadoresModule } from './indicadores/indicadores.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ConsejosModule } from './consejos/consejos.module';
 import { GuiasModule } from './guias/guias.module';
-import { NotificacionesModule } from './notificaciones/notificaciones.module';
 
 @Module({
   imports: [
@@ -23,7 +22,6 @@ import { NotificacionesModule } from './notificaciones/notificaciones.module';
     CategoriasModule,
     ConsejosModule,
     GuiasModule,
-    NotificacionesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
