@@ -7,7 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DatabaseService } from '../database/database.service';
@@ -21,6 +21,10 @@ import { RefreshDto } from './dto/refresh.dto';
 const ACCESS_TTL = 15 * 60;
 const REFRESH_TTL = 7 * 24 * 60 * 60;
 const TAM_MAXIMO_PERFIL = 5 * 1024 * 1024;
+const MINUTOS_CODIGO = 15;
+const MAX_INTENTOS_CODIGO = 5;
+const MENSAJE_RECUPERACION =
+  'Si el correo está registrado, recibirás un código de 6 dígitos.';
 
 @Injectable()
 export class AuthService {
@@ -149,8 +153,10 @@ export class AuthService {
     };
   }
 
-  async restablecerContrasena(dto: ResetPasswordDto) {
-    const usuarios: any = await this.db.query(
+  // Paso 1: generamos un código de 6 dígitos y lo guardamos (hasheado).
+  // Siempre respondemos lo mismo para no revelar qué correos están registrados.
+  async solicitarRecuperacion(dto: ForgotPasswordDto) {
+    const usuarios = (await this.db.query(
       'SELECT id_usuario FROM usuario WHERE correo_electronico = ?',
       [dto.correo_electronico],
     )) as { id_usuario: number }[];

@@ -99,6 +99,16 @@ export class ReportesController {
     return this.reportesService.reportesPorEstado(idEstado);
   }
 
+  // Muro global de la app iOS: reportes activos de los últimos 14 días.
+  // Va antes de ':id' para que 'comunidad' no se interprete como un id.
+  @Get('comunidad')
+  @ApiOperation({
+    summary: 'Muro global: reportes activos de los últimos 14 días',
+  })
+  comunidadGlobal(@CurrentUser() user: JwtPayload) {
+    return this.reportesService.comunidadGlobal(user.sub);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Ver detalle de un reporte' })
   verDetalle(

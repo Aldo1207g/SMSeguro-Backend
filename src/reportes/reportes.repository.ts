@@ -29,6 +29,20 @@ export interface ReporteListaRow extends RowDataPacket {
   mismo_caso_total: number;
 }
 
+export interface ReporteComunidadRow extends RowDataPacket {
+  id_reporte: number;
+  id_usuario: number;
+  titulo: string;
+  descripcion: string;
+  url: string;
+  telefono: string;
+  fecha_creacion: string;
+  id_estado_actual: number;
+  nombre_estado: string;
+  reportado_por: string;
+  mismo_caso_total: number;
+}
+
 export interface ReportePendienteRow extends RowDataPacket {
   id_reporte: number;
   titulo: string;
@@ -401,6 +415,48 @@ export class ReportesRepository {
       ...fila,
       mismo_caso_total: Number(fila.mismo_caso_total),
     }));
+  }
+
+  // Muro global: reportes activos de los últimos 14 días, de todos los usuarios.
+  // Se trae id_usuario solo para calcular es_mio en el servicio.
+  async listarComunidad(): Promise<ReporteComunidadRow[]> {
+    const sql = `
+      SELECT r.id_reporte,
+             r.id_usuario,
+             IFNULL(t.nombre_tipo, 'Sin categoria') AS titulo,
+             r.descripcion,
+             IFNULL((SELECT i.valor_dato
+                       FROM detalle_reporte dr
+                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+                      WHERE dr.id_reporte = r.id_reporte
+                        AND dr.id_rol_indicador = ?
+                      LIMIT 1), '') AS url,
+             IFNULL((SELECT i.valor_dato
+                       FROM detalle_reporte dr
+                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+                      WHERE dr.id_reporte = r.id_reporte
+                        AND dr.id_rol_indicador = ?
+                      LIMIT 1), '') AS telefono,
+             DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
+             r.id_estado_actual,
+             e.nombre_estado,
+             u.nombre_usuario AS reportado_por,
+             (SELECT COUNT(*)
+                FROM reporte_mismo_caso mc
+               WHERE mc.id_reporte = r.id_reporte) AS mismo_caso_total
+      FROM reporte r
+      INNER JOIN usuario u ON u.id_usuario = r.id_usuario
+      LEFT JOIN cat_tipo_fraude t     ON t.id_tipo_fraude = r.id_tipo_fraude
+      INNER JOIN cat_estado_reporte e ON e.id_estado_reporte = r.id_estado_actual
+      WHERE r.activo = TRUE
+        AND r.fecha_registro >= NOW() - INTERVAL 14 DAY
+      ORDER BY r.fecha_registro DESC
+    `;
+
+    return (await this.db.query(sql, [
+      ROL_INDICADOR_ENLACE,
+      ROL_INDICADOR_REMITENTE,
+    ])) as ReporteComunidadRow[];
   }
 
   // Dashboard: cuántos reportes activos hay por cada combinación categoría × estado.

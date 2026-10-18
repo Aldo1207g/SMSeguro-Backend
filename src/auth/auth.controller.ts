@@ -14,7 +14,7 @@ import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
@@ -38,6 +38,12 @@ export class AuthController {
   @Post('refresh')
   refresh(@Body() dto: RefreshDto) {
     return this.authService.refresh(dto);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Solicitar código de 6 dígitos para recuperar contraseña' })
+  solicitarRecuperacion(@Body() dto: ForgotPasswordDto) {
+    return this.authService.solicitarRecuperacion(dto);
   }
 
   @Post('reset-password')

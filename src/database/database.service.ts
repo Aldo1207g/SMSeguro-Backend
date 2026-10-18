@@ -83,6 +83,33 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           MODIFY COLUMN contenido VARCHAR(1000) NOT NULL
         `);
 
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS notificacion (
+            id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
+            id_usuario INT NOT NULL,
+            id_reporte INT NULL,
+            titulo VARCHAR(150) NOT NULL,
+            mensaje VARCHAR(500) NOT NULL,
+            leida BOOLEAN NOT NULL DEFAULT FALSE,
+            fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
+            FOREIGN KEY (id_reporte) REFERENCES reporte(id_reporte)
+          )
+        `);
+
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS recuperacion_contrasena (
+            id_recuperacion INT AUTO_INCREMENT PRIMARY KEY,
+            id_usuario INT NOT NULL,
+            codigo_hash VARCHAR(255) NOT NULL,
+            intentos INT NOT NULL DEFAULT 0,
+            usado BOOLEAN NOT NULL DEFAULT FALSE,
+            expira DATETIME NOT NULL,
+            fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+          )
+        `);
+
         await self.sembrarDatosIniciales(conn);
         conn.release();
       })

@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DictamenRepository } from './dictamen.repository';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import {
   CrearDictamenDto,
   RESOLUCION_APROBADO,
@@ -18,7 +19,10 @@ const ESTADO_RECHAZADO = 3;
 
 @Injectable()
 export class DictamenService {
-  constructor(private readonly dictamenRepository: DictamenRepository) {}
+  constructor(
+    private readonly dictamenRepository: DictamenRepository,
+    private readonly notificacionesService: NotificacionesService,
+  ) {}
 
   async crear(idReporte: number, idAnalista: number, dto: CrearDictamenDto) {
     // 1. Validar que el reporte exista y esté activo
@@ -67,6 +71,11 @@ export class DictamenService {
       await this.dictamenRepository.actualizarEstadoReporte(
         idReporte,
         nuevoEstado,
+      );
+      await this.notificacionesService.avisarCambioDeEstado(
+        idReporte,
+        nuevoEstado,
+        motivoRechazo,
       );
 
       const dictamen = await this.dictamenRepository.buscarPorId(idDictamen);
