@@ -80,6 +80,7 @@ export class ReportesService {
       titulo: fila.titulo,
       descripcion: fila.descripcion,
       url: fila.url,
+      telefono: fila.telefono,
       fecha_creacion: fila.fecha_creacion,
       reportado_por: fila.reportado_por,
     }));
