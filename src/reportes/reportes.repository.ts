@@ -48,6 +48,7 @@ export interface ReportePendienteRow extends RowDataPacket {
   titulo: string;
   descripcion: string;
   url: string;
+  telefono: string;
   fecha_creacion: string;
   reportado_por: string;
 }
@@ -358,6 +359,12 @@ export class ReportesRepository {
                       WHERE dr.id_reporte = r.id_reporte
                         AND dr.id_rol_indicador = ?
                       LIMIT 1), '') AS url,
+             IFNULL((SELECT i.valor_dato
+                       FROM detalle_reporte dr
+                       INNER JOIN indicador i ON i.id_indicador = dr.id_indicador
+                      WHERE dr.id_reporte = r.id_reporte
+                        AND dr.id_rol_indicador = ?
+                      LIMIT 1), '') AS telefono,
              DATE_FORMAT(r.fecha_registro, '%Y-%m-%d') AS fecha_creacion,
              u.nombre_usuario AS reportado_por
       FROM reporte r
@@ -369,6 +376,7 @@ export class ReportesRepository {
 
     return (await this.db.query(sql, [
       ROL_INDICADOR_ENLACE,
+      ROL_INDICADOR_REMITENTE,
     ])) as ReportePendienteRow[];
   }
 

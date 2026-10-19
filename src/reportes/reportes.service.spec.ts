@@ -1,12 +1,19 @@
+process.env.JWT_SECRET = 'clave-secreta-jest-smseguro';
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReportesService } from './reportes.service';
+import { ReportesRepository } from './reportes.repository';
 
 describe('ReportesService', () => {
   let service: ReportesService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ReportesService],
+      providers: [
+        ReportesService,
+        // Repositorio falso: no se usa MySQL en esta prueba
+        { provide: ReportesRepository, useValue: {} },
+      ],
     }).compile();
 
     service = module.get<ReportesService>(ReportesService);
