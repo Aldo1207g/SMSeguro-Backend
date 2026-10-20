@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ReportesRepository } from './reportes.repository';
@@ -243,7 +243,7 @@ export class ReportesService {
     const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let codigo = '';
     for (let i = 0; i < 8; i++) {
-      const indice = Math.floor(Math.random() * caracteres.length);
+      const indice = randomInt(0, caracteres.length); // CSPRNG (antes: Math.random)
       codigo += caracteres[indice];
     }
     return 'SMS-' + codigo;
