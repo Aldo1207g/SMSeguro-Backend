@@ -1,5 +1,3 @@
--- SMSeguro - Equipo 6
-
 DROP DATABASE IF EXISTS smseguro;
 CREATE DATABASE smseguro CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE smseguro;
@@ -117,6 +115,7 @@ CREATE TABLE dictamen (
     FOREIGN KEY (id_resolucion) REFERENCES cat_resolucion(id_resolucion),
     CHECK (id_resolucion <> 2 OR motivo_rechazo IS NOT NULL)
 );
+
 -- 5. CONSEJOS / GUÍAS (los publica el analista/admin, los ve el ciudadano en la app)
 CREATE TABLE consejo (
     id_consejo INT AUTO_INCREMENT PRIMARY KEY,
@@ -126,4 +125,29 @@ CREATE TABLE consejo (
     activo BOOLEAN DEFAULT TRUE,
     fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (id_analista) REFERENCES usuario(id_usuario)
+);
+
+-- 6. NOTIFICACIONES (campana) - avisa al ciudadano cuando su reporte es dictaminado
+CREATE TABLE notificacion (
+    id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    id_reporte INT NULL,
+    titulo VARCHAR(150) NOT NULL,
+    mensaje VARCHAR(255) NOT NULL,
+    leida BOOLEAN DEFAULT FALSE,
+    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
+    FOREIGN KEY (id_reporte) REFERENCES reporte(id_reporte)
+);
+
+-- 7. RECUPERACIÓN DE CONTRASEÑA - código de 6 dígitos (hasheado), 15 min, máx. 5 intentos
+CREATE TABLE recuperacion_contrasena (
+    id_recuperacion INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    codigo_hash VARCHAR(255) NOT NULL,
+    expira DATETIME NOT NULL,
+    intentos INT NOT NULL DEFAULT 0,
+    usado BOOLEAN DEFAULT FALSE,
+    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
 );
